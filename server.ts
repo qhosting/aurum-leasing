@@ -14,8 +14,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configuración de Bases de Datos con credenciales de producción
-// Se priorizan variables de entorno para Easypanel/Docker
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://postgres:57c52e388e393eb0b74f@qhosting_aurum-leasing-db:5432/aurum-leasing-db?sslmode=disable',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -23,26 +21,31 @@ const pool = new Pool({
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://default:5faf81de3571e8b7146c@qhosting_redis:6379');
 
-// Middleware de optimización y seguridad
-app.use(helmet({ contentSecurityPolicy: false }));
+// Ajuste de CSP para permitir scripts de esm.sh y fuentes de Google
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://esm.sh"],
+      "connect-src": ["'self'", "https://esm.sh", "https://*.google.com"],
+      "img-src": ["'self'", "data:", "https://*", "blob:"],
+      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]
+    }
+  }
+}));
+
 app.use(compression());
 app.use(cors());
 app.use(express.json());
 
-// Servir frontend compilado
 app.use(express.static(path.join(__dirname, 'dist')));
 
-/**
- * INIT DB: Crea la estructura necesaria para Aurum Leasing V en el deploy inicial.
- * Se utiliza JSONB para flexibilidad en la evolución de los modelos de Arrendadora y Vehículos.
- */
 const initDb = async () => {
   const client = await pool.connect();
   try {
     console.log('--- AURUM DB INITIALIZATION START ---');
     await client.query('BEGIN');
 
-    // Tabla de Vehículos e Inventario
     await client.query(`
       CREATE TABLE IF NOT EXISTS vehicles (
         id TEXT PRIMARY KEY,
@@ -53,7 +56,6 @@ const initDb = async () => {
       );
     `);
 
-    // Tabla de Choferes / Arrendatarios
     await client.query(`
       CREATE TABLE IF NOT EXISTS drivers (
         id TEXT PRIMARY KEY,
@@ -64,7 +66,6 @@ const initDb = async () => {
       );
     `);
 
-    // Tabla de Pagos y Transacciones
     await client.query(`
       CREATE TABLE IF NOT EXISTS payments (
         id TEXT PRIMARY KEY,
@@ -76,7 +77,6 @@ const initDb = async () => {
       );
     `);
 
-    // Tabla de Arrendadoras (Clientes SaaS / Tenants)
     await client.query(`
       CREATE TABLE IF NOT EXISTS tenants (
         id TEXT PRIMARY KEY,
@@ -87,7 +87,6 @@ const initDb = async () => {
       );
     `);
 
-    // Tabla de Planes de Servicio Aurum
     await client.query(`
       CREATE TABLE IF NOT EXISTS service_plans (
         id TEXT PRIMARY KEY,
@@ -107,9 +106,6 @@ const initDb = async () => {
   }
 };
 
-// --- API ENDPOINTS ---
-
-// Fleet API
 app.get('/api/fleet', async (req, res) => {
   try {
     const result = await pool.query('SELECT data FROM vehicles ORDER BY created_at DESC');
@@ -132,7 +128,6 @@ app.post('/api/fleet', async (req, res) => {
   }
 });
 
-// Drivers API
 app.get('/api/drivers', async (req, res) => {
   try {
     const result = await pool.query('SELECT data FROM drivers ORDER BY created_at DESC');
@@ -155,7 +150,6 @@ app.post('/api/drivers', async (req, res) => {
   }
 });
 
-// Redis: Tracking de actividad global
 app.get('/api/stats/visits', async (req, res) => {
   try {
     const visits = await redis.incr('global_visits');
@@ -165,12 +159,10 @@ app.get('/api/stats/visits', async (req, res) => {
   }
 });
 
-// Fallback para Single Page Application
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-// Inicializar DB y luego arrancar servidor
 initDb().then(() => {
   app.listen(port, () => {
     console.log(`🚀 Aurum Enterprise Server running on port ${port}`);
