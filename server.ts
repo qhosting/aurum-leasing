@@ -150,7 +150,7 @@ app.get('/api/driver/me', async (req, res) => {
     const driver = await pool.query('SELECT * FROM drivers WHERE id = $1', [driverId]);
     const payments = await pool.query('SELECT SUM(amount) as balance FROM payments WHERE driver_id = $1 AND status = \'verified\'', [driverId]);
     res.json({ ...driver.rows[0], balance: parseFloat(payments.rows[0].balance || '0') });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 app.patch('/api/driver/profile', async (req, res) => {
@@ -161,7 +161,7 @@ app.patch('/api/driver/profile', async (req, res) => {
       [JSON.stringify(data), id]
     );
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/driver/vehicle', async (req, res) => {
@@ -183,7 +183,7 @@ app.post('/api/payments/report', async (req, res) => {
     await pool.query('INSERT INTO payments (id, driver_id, tenant_id, amount, status, data) VALUES ($1, $2, $3, $4, $5, $6)', 
       [id, driver_id, tenant_id, amount, 'pending', data]);
     res.json({ success: true, id });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/stats/visits', async (req, res) => {
