@@ -1,46 +1,68 @@
-# --- ETAPA 1: COMPILACIÓN ---
-FROM node:20-alpine AS builder
-
-# Dependencias para compilación de módulos nativos (pg, node-gyp)
-RUN apk add --no-cache python3 make g++ bash
-
+# --- ETAPA 1: DEPENDENCIAS ---
+# Instalamos dependencias en una capa separada para aprovechar el caché de Docker
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Instalar dependencias usando legacy-peer-deps para evitar errores de resolución (ERESOLVE)
+# Copiamos archivos de manifiesto
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
 
-# Copiar código fuente
+# Instalamos todas las dependencias (incluyendo devDeps para el build)
+# Usamos ci para instalaciones deterministas y legacy-peer-deps por compatibilidad
+RUN npm ci --legacy-peer-deps
+
+# --- ETAPA 2: COMPILACIÓN ---
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Traemos las dependencias instaladas
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Ejecutar el build definido en package.json
-# Esto genera el servidor (server.js) y el bundle del cliente (en dist/)
+# Ejecutamos el script de construcción definido en package.json
+# Esto genera: 
+# 1. /dist (Frontend bundle + assets)
+# 2. server.js (Backend transpilado en la raíz)
 RUN npm run build
 
-# --- ETAPA 2: PRODUCCIÓN ---
+# --- ETAPA 3: PRODUCCIÓN (IMAGEN FINAL) ---
 FROM node:20-alpine AS runner
 LABEL maintainer="Aurum Engineering <dev@aurum.mx>"
 LABEL project="Aurum Leasing System"
-LABEL version="1.5.1"
+LABEL environment="production"
 
 WORKDIR /app
 
-# Copiar el servidor compilado y el directorio dist (estáticos del frontend)
-# Nota: server.js se genera en la raíz según tsconfig.json
-COPY --from=builder /app/server.js ./server.js
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package*.json ./
-
-# Instalar solo dependencias de producción para mantener la imagen ligera
-# Es crucial usar --legacy-peer-deps para mantener consistencia con el build
-RUN npm install --production --legacy-peer-deps && npm cache clean --force
-
-# Variables de entorno por defecto
+# Configuramos variables de entorno de producción
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# El sistema espera DATABASE_URL y REDIS_URL inyectados por el entorno de cloud
+# Seguridad: Crear un usuario no-root para ejecutar el proceso
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 aurum_user
+
+# Copiamos únicamente los artefactos necesarios desde la etapa de construcción
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/package*.json ./
+
+# Instalamos solo dependencias de producción para minimizar el tamaño de la imagen
+RUN npm ci --only=production --legacy-peer-deps && \
+    npm cache clean --force
+
+# Otorgamos permisos al usuario de Aurum
+RUN chown -R aurum_user:nodejs /app
+
+# Cambiamos al usuario no privilegiado
+USER aurum_user
+
+# Exponemos el puerto de la aplicación
 EXPOSE 3000
 
-# Comando de inicio
+# Healthcheck para monitoreo del orquestador (Cloud/K8s)
+# Valida que el endpoint de estadísticas responda correctamente
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/api/stats/visits').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+
+# Comando de inicio optimizado
 CMD ["node", "server.js"]

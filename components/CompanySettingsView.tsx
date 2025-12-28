@@ -6,8 +6,7 @@ import {
   CreditCard, ChevronRight, Image as ImageIcon,
   CheckCircle, Zap, ChevronLeft, Briefcase,
   Share2, MessageSquare, Code2, Link, Terminal, Check,
-  LogOut,
-  Dns
+  LogOut
 } from 'lucide-react';
 
 interface CompanySettingsViewProps {
