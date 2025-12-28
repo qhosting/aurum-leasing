@@ -1,0 +1,7 @@
+{
+  "name": "Aurum Leasing Manager",
+  "description": "Enterprise-grade vehicle leasing management system for taxi and ride-hailing fleets, featuring real-time financial tracking, risk analysis, and AI-powered fleet optimization.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
