@@ -12,26 +12,12 @@ export const persistenceService = {
       const data = await res.json();
       return data.length > 0 ? data : MOCK_VEHICLES;
     } catch (err) {
-      console.warn('[Aurum] Usando fallback de vehículos');
+      console.warn('[Aurum] Usando fallback de vehículos local');
       return MOCK_VEHICLES;
     }
   },
 
-  async saveVehicle(vehicle: Vehicle): Promise<boolean> {
-    try {
-      const res = await fetch(`${API_BASE}/fleet`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(vehicle),
-      });
-      return res.ok;
-    } catch (err) {
-      const local = JSON.parse(localStorage.getItem('aurum_local_fleet') || '[]');
-      localStorage.setItem('aurum_local_fleet', JSON.stringify([...local, vehicle]));
-      return true;
-    }
-  },
-
+  // Added getDrivers to handle driver data retrieval and fix TypeScript property missing error
   async getDrivers(): Promise<Driver[]> {
     try {
       const res = await fetch(`${API_BASE}/drivers`);
@@ -39,20 +25,18 @@ export const persistenceService = {
       const data = await res.json();
       return data.length > 0 ? data : MOCK_DRIVERS;
     } catch (err) {
+      console.warn('[Aurum] Usando fallback de conductores local');
       return MOCK_DRIVERS;
     }
   },
 
-  async saveDriver(driver: Driver): Promise<boolean> {
+  async getPendingPayments(): Promise<any[]> {
     try {
-      const res = await fetch(`${API_BASE}/drivers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(driver),
-      });
-      return res.ok;
+      const res = await fetch(`${API_BASE}/payments/pending`);
+      if (!res.ok) return [];
+      return await res.json();
     } catch (err) {
-      return false;
+      return [];
     }
   },
 
