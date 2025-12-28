@@ -21,7 +21,6 @@ const pool = new Pool({
 
 const redis = new Redis('redis://default:5faf81de3571e8b7146c@qhosting_redis:6379');
 
-// Fix: Cast helmet middleware to any to resolve PathParams mismatch error
 app.use(helmet({
   contentSecurityPolicy: {
     useDefaults: true,
@@ -34,7 +33,6 @@ app.use(helmet({
   }
 }) as any);
 
-// Fix: Cast standard middleware to any to resolve PathParams mismatch errors
 app.use(compression() as any);
 app.use(cors() as any);
 app.use(express.json() as any);
@@ -43,85 +41,87 @@ app.use(express.static(path.join(__dirname, 'dist')) as any);
 const initDb = async () => {
   const client = await pool.connect();
   try {
-    console.log('📦 Aurum System: Revisando e Iniciando Base de Datos...');
+    console.log('📦 Aurum System: Iniciando Migración Robusta de DB...');
     await client.query('BEGIN');
 
-    // 1. Tablas Base
+    // 1. Asegurar que las tablas existan con al menos la columna ID
     await client.query(`
-      CREATE TABLE IF NOT EXISTS tenants (
-        id TEXT PRIMARY KEY, 
-        company_name TEXT NOT NULL, 
-        status TEXT DEFAULT 'active', 
-        data JSONB NOT NULL DEFAULT '{}', 
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY, 
-        email TEXT UNIQUE NOT NULL, 
-        password TEXT NOT NULL, 
-        role TEXT NOT NULL, 
-        tenant_id TEXT REFERENCES tenants(id), 
-        data JSONB DEFAULT '{}', 
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS drivers (
-        id TEXT PRIMARY KEY, 
-        email TEXT UNIQUE, 
-        tenant_id TEXT REFERENCES tenants(id), 
-        data JSONB NOT NULL DEFAULT '{}', 
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, 
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS vehicles (
-        id TEXT PRIMARY KEY, 
-        plate TEXT UNIQUE NOT NULL, 
-        tenant_id TEXT REFERENCES tenants(id), 
-        driver_id TEXT REFERENCES drivers(id), 
-        data JSONB NOT NULL DEFAULT '{}', 
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS payments (
-        id TEXT PRIMARY KEY, 
-        tenant_id TEXT REFERENCES tenants(id), 
-        driver_id TEXT REFERENCES drivers(id), 
-        amount DECIMAL(12,2) NOT NULL, 
-        status TEXT DEFAULT 'pending', 
-        data JSONB NOT NULL DEFAULT '{}', 
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS notifications (
-        id TEXT PRIMARY KEY,
-        user_id TEXT,
-        role_target TEXT, 
-        title TEXT NOT NULL,
-        message TEXT NOT NULL,
-        type TEXT NOT NULL,
-        read BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
+      CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS drivers (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS vehicles (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY);
     `);
 
-    // 2. Índices para Optimización
+    // 2. Helper para agregar columnas si no existen
+    const addColumn = async (table: string, column: string, type: string) => {
+      const checkColumn = await client.query(`
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = $1 AND column_name = $2
+      `, [table, column]);
+      
+      if (checkColumn.rowCount === 0) {
+        console.log(`  -> Migrando: Agregando columna ${column} a ${table}`);
+        await client.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+      }
+    };
+
+    // 3. Definir esquema completo mediante migraciones incrementales
+    // Tenants
+    await addColumn('tenants', 'company_name', 'TEXT NOT NULL DEFAULT \'Sin Nombre\'');
+    await addColumn('tenants', 'status', 'TEXT DEFAULT \'active\'');
+    await addColumn('tenants', 'data', 'JSONB NOT NULL DEFAULT \'{}\'');
+    await addColumn('tenants', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+
+    // Users
+    await addColumn('users', 'email', 'TEXT UNIQUE');
+    await addColumn('users', 'password', 'TEXT');
+    await addColumn('users', 'role', 'TEXT');
+    await addColumn('users', 'tenant_id', 'TEXT REFERENCES tenants(id)');
+    await addColumn('users', 'data', 'JSONB DEFAULT \'{}\'');
+    await addColumn('users', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+
+    // Drivers (EL PUNTO DE FALLO REPORTADO)
+    await addColumn('drivers', 'email', 'TEXT UNIQUE');
+    await addColumn('drivers', 'tenant_id', 'TEXT REFERENCES tenants(id)');
+    await addColumn('drivers', 'data', 'JSONB NOT NULL DEFAULT \'{}\'');
+    await addColumn('drivers', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    await addColumn('drivers', 'updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+
+    // Vehicles
+    await addColumn('vehicles', 'plate', 'TEXT UNIQUE');
+    await addColumn('vehicles', 'tenant_id', 'TEXT REFERENCES tenants(id)');
+    await addColumn('vehicles', 'driver_id', 'TEXT REFERENCES drivers(id)');
+    await addColumn('vehicles', 'data', 'JSONB NOT NULL DEFAULT \'{}\'');
+    await addColumn('vehicles', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+
+    // Payments
+    await addColumn('payments', 'tenant_id', 'TEXT REFERENCES tenants(id)');
+    await addColumn('payments', 'driver_id', 'TEXT REFERENCES drivers(id)');
+    await addColumn('payments', 'amount', 'DECIMAL(12,2)');
+    await addColumn('payments', 'status', 'TEXT DEFAULT \'pending\'');
+    await addColumn('payments', 'data', 'JSONB NOT NULL DEFAULT \'{}\'');
+    await addColumn('payments', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+
+    // Notifications
+    await addColumn('notifications', 'user_id', 'TEXT');
+    await addColumn('notifications', 'role_target', 'TEXT');
+    await addColumn('notifications', 'title', 'TEXT NOT NULL DEFAULT \'Aviso\'');
+    await addColumn('notifications', 'message', 'TEXT NOT NULL DEFAULT \'-\'');
+    await addColumn('notifications', 'type', 'TEXT NOT NULL DEFAULT \'system\'');
+    await addColumn('notifications', 'read', 'BOOLEAN DEFAULT FALSE');
+    await addColumn('notifications', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+
+    // 4. Índices
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_payments_driver ON payments(driver_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_vehicles_tenant ON vehicles(tenant_id);
     `);
 
-    // 3. Verificación de columnas (Migración suave)
-    const addColumn = async (table: string, column: string, type: string) => {
-      await client.query(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE LOWER(table_name)=LOWER('${table}') AND LOWER(column_name)=LOWER('${column}')) THEN ALTER TABLE ${table} ADD COLUMN ${column} ${type}; END IF; END $$;`);
-    };
-
-    await addColumn('notifications', 'role_target', 'TEXT');
-
     await client.query('COMMIT');
-    console.log('✅ Aurum System: Esquema de Tablas verificado y relacionado.');
+    console.log('✅ Aurum System: Esquema verificado y migrado con éxito.');
   } catch (err: any) {
     await client.query('ROLLBACK');
     console.error('❌ Aurum System Error (initDb):', err.message);
@@ -130,34 +130,21 @@ const initDb = async () => {
   }
 };
 
-// --- ENDPOINT DE AUDITORIA DE TABLAS ---
-// Fix: Use any for req and res to avoid "Property 'json' does not exist" and other type mismatch errors
 app.get('/api/admin/db-check', async (req: any, res: any) => {
   try {
     const tables = ['tenants', 'users', 'drivers', 'vehicles', 'payments', 'notifications'];
     const status: any = {};
-    
     for (const table of tables) {
       const r = await pool.query(`SELECT COUNT(*) FROM ${table}`);
       status[table] = parseInt(r.rows[0].count);
     }
-    
     const redisVisits = await redis.get('global_visits');
-    res.json({ 
-      postgres: status, 
-      redis: { global_visits: parseInt(redisVisits || '0') },
-      status: 'Healthy' 
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
+    res.json({ postgres: status, redis: { global_visits: parseInt(redisVisits || '0') }, status: 'Healthy' });
+  } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// --- ENDPOINTS DE NOTIFICACIONES ---
-// Fix: Use any for req and res to avoid "Property 'query' does not exist" type mismatch errors
 app.get('/api/notifications', async (req: any, res: any) => {
-  const role = req.query.role as string | undefined;
-  const user_id = req.query.user_id as string | undefined;
+  const { role, user_id } = req.query;
   try {
     const r = await pool.query(
       'SELECT * FROM notifications WHERE role_target = $1 OR user_id = $2 ORDER BY created_at DESC LIMIT 50',
@@ -170,7 +157,6 @@ app.get('/api/notifications', async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// Fix: Use any for req and res to avoid "Property 'body' does not exist" type mismatch errors
 app.post('/api/notifications/read', async (req: any, res: any) => {
   const { id } = req.body;
   try {
@@ -179,18 +165,6 @@ app.post('/api/notifications/read', async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// Fix: Use any for req and res to avoid "Property 'query' does not exist" type mismatch errors
-app.delete('/api/notifications', async (req: any, res: any) => {
-  const role = req.query.role as string | undefined;
-  const user_id = req.query.user_id as string | undefined;
-  try {
-    await pool.query('DELETE FROM notifications WHERE role_target = $1 OR user_id = $2', [role || null, user_id || null]);
-    res.json({ success: true });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
-});
-
-// --- LOGICA DE NEGOCIO ---
-// Fix: Use any for req and res to avoid "Property 'body' does not exist" type mismatch errors
 app.post('/api/auth/login', async (req: any, res: any) => {
   const { email, password } = req.body;
   try {
@@ -198,13 +172,10 @@ app.post('/api/auth/login', async (req: any, res: any) => {
     if (r.rows.length > 0) {
       await redis.incr('global_visits');
       res.json({ success: true, user: r.rows[0] });
-    } else {
-      res.status(401).json({ success: false, error: 'Credenciales inválidas' });
-    }
+    } else { res.status(401).json({ success: false, error: 'Credenciales inválidas' }); }
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// Fix: Use any for req and res to avoid "Property 'body' does not exist" type mismatch errors
 app.post('/api/payments/report', async (req: any, res: any) => {
   const { driver_id, tenant_id, amount, ...data } = req.body;
   const id = `p-${Date.now()}`;
@@ -213,42 +184,26 @@ app.post('/api/payments/report', async (req: any, res: any) => {
     await pool.query('BEGIN');
     await pool.query('INSERT INTO payments (id, driver_id, tenant_id, amount, status, data) VALUES ($1, $2, $3, $4, $5, $6)', 
       [id, driver_id, tenant_id, amount, 'pending', JSON.stringify(data)]);
-    
-    await pool.query(
-      'INSERT INTO notifications (id, role_target, title, message, type) VALUES ($1, $2, $3, $4, $5)',
-      [notifId, 'Arrendador', 'Nuevo Pago Reportado', `Monto: $${amount} de chofer ID: ${driver_id}`, 'payment']
-    );
-    
+    await pool.query('INSERT INTO notifications (id, role_target, title, message, type) VALUES ($1, $2, $3, $4, $5)',
+      [notifId, 'Arrendador', 'Nuevo Pago Reportado', `Monto: $${amount} de chofer ID: ${driver_id}`, 'payment']);
     await pool.query('COMMIT');
     res.json({ success: true, id });
-  } catch (err: any) { 
-    await pool.query('ROLLBACK');
-    res.status(500).json({ error: err.message }); 
-  }
+  } catch (err: any) { await pool.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
 });
 
-// Fix: Use any for req and res to avoid "Property 'body' does not exist" type mismatch errors
 app.post('/api/payments/verify', async (req: any, res: any) => {
   const { payment_id, driver_id, amount } = req.body;
   const notifId = `n-v-${Date.now()}`;
   try {
     await pool.query('BEGIN');
     await pool.query('UPDATE payments SET status = \'verified\' WHERE id = $1', [payment_id]);
-    
-    await pool.query(
-      'INSERT INTO notifications (id, user_id, role_target, title, message, type) VALUES ($1, $2, $3, $4, $5, $6)',
-      [notifId, driver_id, 'Arrendatario', 'Pago Verificado', `Tu pago por $${amount} ha sido validado con éxito.`, 'payment']
-    );
-    
+    await pool.query('INSERT INTO notifications (id, user_id, role_target, title, message, type) VALUES ($1, $2, $3, $4, $5, $6)',
+      [notifId, driver_id, 'Arrendatario', 'Pago Verificado', `Tu pago por $${amount} ha sido validado con éxito.`, 'payment']);
     await pool.query('COMMIT');
     res.json({ success: true });
-  } catch (err: any) {
-    await pool.query('ROLLBACK');
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err: any) { await pool.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
 });
 
-// Fix: Use any for req and res to avoid "Property 'query' does not exist" type mismatch errors
 app.get('/api/driver/me', async (req: any, res: any) => {
   const driverId = (req.query.id as string) || 'd1';
   try {
@@ -258,7 +213,6 @@ app.get('/api/driver/me', async (req: any, res: any) => {
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
 
-// Fix: Use any for req and res to avoid "Property 'json' does not exist" type mismatch errors
 app.get('/api/stats/visits', async (req: any, res: any) => {
   try {
     const visits = await redis.get('global_visits');
@@ -266,7 +220,6 @@ app.get('/api/stats/visits', async (req: any, res: any) => {
   } catch (err: any) { res.json({ visits: 0 }); }
 });
 
-// Fix: Use any for req and res to avoid "Property 'sendFile' does not exist" type mismatch errors
 app.get('*', (req: any, res: any) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
 
 initDb().then(() => app.listen(port, () => console.log(`🚀 Aurum Cloud Active on Port ${port}`)));
