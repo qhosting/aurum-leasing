@@ -1,0 +1,68 @@
+# --- ETAPA 1: DEPENDENCIAS ---
+# Instalamos dependencias en una capa separada para aprovechar el caché de Docker
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Copiamos archivos de manifiesto
+COPY package*.json ./
+
+# Instalamos todas las dependencias (incluyendo devDeps para el build)
+# Usamos ci para instalaciones deterministas y legacy-peer-deps por compatibilidad
+RUN npm ci --legacy-peer-deps
+
+# --- ETAPA 2: COMPILACIÓN ---
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Traemos las dependencias instaladas
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Ejecutamos el script de construcción definido en package.json
+# Esto genera: 
+# 1. /dist (Frontend bundle + assets)
+# 2. server.js (Backend transpilado en la raíz)
+RUN npm run build
+
+# --- ETAPA 3: PRODUCCIÓN (IMAGEN FINAL) ---
+FROM node:20-alpine AS runner
+LABEL maintainer="Aurum Engineering <dev@aurum.mx>"
+LABEL project="Aurum Leasing System"
+LABEL environment="production"
+
+WORKDIR /app
+
+# Configuramos variables de entorno de producción
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Seguridad: Crear un usuario no-root para ejecutar el proceso
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 aurum_user
+
+# Copiamos únicamente los artefactos necesarios desde la etapa de construcción
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/package*.json ./
+
+# Instalamos solo dependencias de producción para minimizar el tamaño de la imagen
+RUN npm ci --only=production --legacy-peer-deps && \
+    npm cache clean --force
+
+# Otorgamos permisos al usuario de Aurum
+RUN chown -R aurum_user:nodejs /app
+
+# Cambiamos al usuario no privilegiado
+USER aurum_user
+
+# Exponemos el puerto de la aplicación
+EXPOSE 3000
+
+# Healthcheck para monitoreo del orquestador (Cloud/K8s)
+# Valida que el endpoint de estadísticas responda correctamente
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/api/stats/visits').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+
+# Comando de inicio optimizado
+CMD ["node", "server.js"]
