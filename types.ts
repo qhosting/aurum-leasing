@@ -12,6 +12,15 @@ export enum VehicleStatus {
   DEBT_HOLD = 'Bloqueado (Mora)'
 }
 
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  type: 'payment' | 'system' | 'alert' | 'maintenance';
+}
+
 export interface ServicePlan {
   id: string;
   name: string;

@@ -1,5 +1,5 @@
 
-import { Vehicle, Driver, PaymentRecord, UserRole, ArrendadoraAccount, ServicePlan } from '../types';
+import { Vehicle, Driver, PaymentRecord, UserRole, ArrendadoraAccount, ServicePlan, Notification } from '../types';
 
 const API_BASE = '/api';
 
@@ -25,6 +25,34 @@ export const persistenceService = {
       });
       return await res.json();
     } catch (err) { return { success: false, error: 'Error de red.' }; }
+  },
+
+  // NOTIFICATIONS PRODUCTION METHODS
+  async getNotifications(role: string, userId: string): Promise<Notification[]> {
+    try {
+      const res = await fetch(`${API_BASE}/notifications?role=${role}&user_id=${userId}`);
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async markNotificationRead(id: string): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/notifications/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      return await res.json();
+    } catch { return { success: false }; }
+  },
+
+  async clearNotifications(role: string, userId: string): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/notifications?role=${role}&user_id=${userId}`, {
+        method: 'DELETE'
+      });
+      return await res.json();
+    } catch { return { success: false }; }
   },
 
   // Driver (Arrendatario) Methods
@@ -62,6 +90,17 @@ export const persistenceService = {
   },
 
   // Lessor (Arrendador) Methods
+  async verifyPayment(paymentId: string, driverId: string, amount: number): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/payments/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_id: paymentId, driver_id: driverId, amount })
+      });
+      return await res.json();
+    } catch { return { success: false }; }
+  },
+
   async getArrendadorStats(tenantId: string = 't1'): Promise<any> {
     try {
       const res = await fetch(`${API_BASE}/arrendador/stats?tenant_id=${tenantId}`);
@@ -81,6 +120,7 @@ export const persistenceService = {
       const res = await fetch(`${API_BASE}/fleet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // Fix: Use the parameter 'tenantId' instead of the undefined 'tenant_id'
         body: JSON.stringify({ ...vehicle, tenant_id: tenantId })
       });
       return await res.json();
@@ -92,17 +132,6 @@ export const persistenceService = {
       const res = await fetch(`${API_BASE}/drivers?tenant_id=${tenantId}`);
       return await res.json();
     } catch { return []; }
-  },
-
-  async saveDriver(driver: Partial<Driver>, tenantId: string = 't1'): Promise<any> {
-    try {
-      const res = await fetch(`${API_BASE}/drivers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...driver, tenant_id: tenantId })
-      });
-      return await res.json();
-    } catch { return { error: 'Network error' }; }
   },
 
   async getGlobalStats(): Promise<{ visits: number }> {

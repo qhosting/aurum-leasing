@@ -15,8 +15,13 @@ import {
   UserPlus, MapPinned
 } from 'lucide-react';
 import { persistenceService } from '../services/persistenceService';
+import { Notification } from '../types';
 
-const ArrendatarioView: React.FC = () => {
+interface ArrendatarioViewProps {
+  refreshGlobalNotifs?: () => void;
+}
+
+const ArrendatarioView: React.FC<ArrendatarioViewProps> = ({ refreshGlobalNotifs }) => {
   const [activeTab, setActiveTab] = useState<'cuenta' | 'perfil'>('cuenta');
   const [isLoading, setIsLoading] = useState(true);
   const [driver, setDriver] = useState<any>(null);
@@ -42,7 +47,6 @@ const ArrendatarioView: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
-      // El driverId real vendría de la sesión, usamos 'd1' para demo persistente
       const driverId = 'd1';
       const [dData, vData, pData] = await Promise.all([
         persistenceService.getDriverMe(driverId),
@@ -78,6 +82,8 @@ const ArrendatarioView: React.FC = () => {
       });
       if (res.success) {
         setShowSuccess(true);
+        if (refreshGlobalNotifs) refreshGlobalNotifs();
+
         setTimeout(() => {
           setIsReportingPayment(false);
           setShowSuccess(false);
@@ -141,7 +147,6 @@ const ArrendatarioView: React.FC = () => {
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Progreso de Propiedad</p>
                   <div className="flex justify-between items-end mb-4">
                     <span className="text-2xl font-black text-amber-500">{equityPercentage.toFixed(1)}%</span>
-                    <span className="text-[9px] font-bold text-slate-500 uppercase">Propiedad Real</span>
                   </div>
                   <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
                     <div className="h-full bg-amber-500" style={{ width: `${equityPercentage}%` }}></div>
@@ -161,8 +166,8 @@ const ArrendatarioView: React.FC = () => {
                  {payments.map(p => (
                    <div key={p.id} className="p-5 bg-slate-50 rounded-[1.8rem] border border-slate-100 flex justify-between items-center group">
                       <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${p.status === 'verified' ? 'text-emerald-500 bg-white' : 'text-amber-500 bg-white'}`}>
-                          {p.status === 'verified' ? <CheckCircle2 className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm text-amber-500 bg-white`}>
+                          {p.status === 'verified' ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <Clock className="w-5 h-5" />}
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-900">${p.amount.toLocaleString()}</p>
@@ -174,23 +179,6 @@ const ArrendatarioView: React.FC = () => {
                  ))}
                </div>
             </div>
-            <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm h-fit">
-               <h5 className={labelStyles}>Unidad Vinculada</h5>
-               <div className="space-y-4 mt-6">
-                  <div className="flex justify-between items-center">
-                     <p className="text-xs font-bold text-slate-500 uppercase">Estatus</p>
-                     <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded uppercase">{vehicle?.status}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                     <p className="text-xs font-bold text-slate-500 uppercase">Placa</p>
-                     <span className="font-black text-slate-900">{vehicle?.plate}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                     <p className="text-xs font-bold text-slate-500 uppercase">Mantenimiento</p>
-                     <span className="font-black text-amber-600 italic">Venc. {vehicle?.verificationExpiry}</span>
-                  </div>
-               </div>
-            </div>
           </div>
         </div>
       ) : (
@@ -200,11 +188,9 @@ const ArrendatarioView: React.FC = () => {
               <div className="space-y-6">
                 <div><label className={labelStyles}>Nombre Completo</label><p className="text-xl font-black text-slate-900">{driver.data.name}</p></div>
                 <div><label className={labelStyles}>Email de Registro</label><p className="font-bold text-slate-600">{driver.email}</p></div>
-                <div><label className={labelStyles}>Teléfono</label><p className="font-bold text-slate-600">{driver.data.phone}</p></div>
               </div>
               <div className="bg-slate-900 p-8 rounded-[2rem] text-white flex flex-col items-center justify-center">
                  <QrCode className="w-32 h-32 mb-4 text-amber-500" />
-                 <p className="text-[10px] font-black uppercase tracking-widest opacity-60">ID Digital Aurum</p>
                  <p className="text-lg font-black mt-2">{driver.id}</p>
               </div>
            </div>
@@ -225,11 +211,9 @@ const ArrendatarioView: React.FC = () => {
               <div className="p-8 lg:p-12 space-y-10 overflow-y-auto">
                 <h3 className="text-3xl font-black tracking-tighter uppercase italic">Reportar Pago</h3>
                 <div className="space-y-6">
-                  <div><label className={labelStyles}>Concepto</label><select className={inputStyles} value={paymentForm.type} onChange={e => setPaymentForm({...paymentForm, type: e.target.value})}><option value="renta">Renta Semanal</option><option value="fianza">Abono Fianza</option></select></div>
                   <div><label className={labelStyles}>Monto ($)</label><input type="number" className={inputStyles} value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} /></div>
                   <button onClick={() => receiptInputRef.current?.click()} className="w-full py-10 border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center gap-2 group hover:border-amber-400 hover:bg-amber-50 transition-all">
                     {paymentForm.receiptData ? <ImageIcon className="w-10 h-10 text-emerald-500" /> : <Camera className="w-10 h-10 text-slate-300 group-hover:text-amber-500" />}
-                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{paymentForm.receiptData ? "Imagen Cargada" : "Subir Comprobante"}</span>
                   </button>
                   <button onClick={() => handleActionSubmit('payment')} disabled={isSubmitting || !paymentForm.amount} className="w-full py-6 bg-slate-900 text-white rounded-[2rem] font-black uppercase tracking-widest flex items-center justify-center gap-3">
                     {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 text-amber-500" />} Confirmar Reporte

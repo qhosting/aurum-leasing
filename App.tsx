@@ -6,7 +6,8 @@ import {
   LogOut, ChevronDown, Download, WifiOff, X, Menu as MenuIcon,
   Loader2, CheckCircle2, ArrowRight, Zap, Globe, Shield, 
   ChevronRight, Mail, Lock, Sparkles, Star, TrendingUp,
-  CreditCard, Smartphone, MapPin, Navigation, MousePointer2
+  CreditCard, Smartphone, MapPin, Navigation, MousePointer2,
+  Bell, Clock, Trash2
 } from 'lucide-react';
 import DashboardView from './components/DashboardView';
 import FleetView from './components/FleetView';
@@ -16,8 +17,58 @@ import CompanySettingsView from './components/CompanySettingsView';
 import SuperAdminView from './components/SuperAdminView';
 import ArrendatarioView from './components/ArrendatarioView';
 import ArrendatarioSettingsView from './components/ArrendatarioSettingsView';
-import { UserRole, Vehicle, Driver } from './types';
+import { UserRole, Vehicle, Driver, Notification } from './types';
 import { persistenceService } from './services/persistenceService';
+
+// --- COMPONENTE: NOTIFICATION CENTER ---
+const NotificationCenter: React.FC<{ 
+  notifications: Notification[]; 
+  onMarkRead: (id: string) => void;
+  onClear: () => void;
+  isOpen: boolean;
+  onClose: () => void;
+}> = ({ notifications, onMarkRead, onClear, isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute right-0 top-16 w-80 md:w-96 bg-white/90 backdrop-blur-2xl border border-slate-200 rounded-[2.5rem] shadow-2xl z-[100] overflow-hidden animate-in slide-in-from-top-4 duration-300">
+      <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-900">Notificaciones</h3>
+        <button onClick={onClear} className="text-[10px] font-black text-rose-500 uppercase hover:text-rose-600 transition-colors">Limpiar</button>
+      </div>
+      <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
+        {notifications.length === 0 ? (
+          <div className="p-10 text-center">
+            <Bell className="w-10 h-10 text-slate-200 mx-auto mb-4" />
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sin avisos nuevos</p>
+          </div>
+        ) : (
+          notifications.map((n) => (
+            <div 
+              key={n.id} 
+              onClick={() => onMarkRead(n.id)}
+              className={`p-5 border-b border-slate-50 cursor-pointer transition-colors hover:bg-slate-50 flex gap-4 ${!n.read ? 'bg-amber-50/30' : ''}`}
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                n.type === 'payment' ? 'bg-emerald-100 text-emerald-600' : 
+                n.type === 'alert' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'
+              }`}>
+                {n.type === 'payment' ? <DollarSign className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-black text-slate-900 leading-tight">{n.title}</p>
+                <p className="text-[11px] text-slate-500 mt-1 leading-snug">{n.message}</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase mt-2">{n.timestamp}</p>
+              </div>
+              {!n.read && <div className="w-2 h-2 bg-amber-500 rounded-full shrink-0 mt-2"></div>}
+            </div>
+          ))
+        )}
+      </div>
+      <button onClick={onClose} className="w-full py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 border-t border-slate-100 hover:text-slate-600 transition-colors">Cerrar</button>
+    </div>
+  );
+};
 
 // --- COMPONENTE: LANDING PAGE ---
 const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
@@ -153,6 +204,8 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [globalVisits, setGlobalVisits] = useState(0);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   
   const [globalData, setGlobalData] = useState<{vehicles: Vehicle[], drivers: Driver[]}>({vehicles: [], drivers: []});
 
@@ -165,8 +218,14 @@ const App: React.FC = () => {
     ]);
     setGlobalData({ vehicles, drivers });
     setGlobalVisits(stats.visits);
+    
+    // FETCH REAL NOTIFICATIONS FROM API
+    const userId = role === UserRole.ARRENDATARIO ? 'd1' : '';
+    const notifs = await persistenceService.getNotifications(role, userId);
+    setNotifications(notifs);
+    
     setIsDataLoaded(true);
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     refreshData();
@@ -181,7 +240,7 @@ const App: React.FC = () => {
     setRole(selectedRole);
     setView('app');
     localStorage.setItem('aurum_session_role', selectedRole);
-    refreshData(); // Recargar datos tras login
+    refreshData();
   };
 
   const handleLogout = useCallback(() => {
@@ -193,6 +252,19 @@ const App: React.FC = () => {
       setIsMobileMenuOpen(false);
     }
   }, []);
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+  const markNotificationRead = async (id: string) => {
+    await persistenceService.markNotificationRead(id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const clearNotifications = async () => {
+    const userId = role === UserRole.ARRENDATARIO ? 'd1' : '';
+    await persistenceService.clearNotifications(role, userId);
+    setNotifications([]);
+  };
 
   const menuItems = useMemo(() => {
     switch (role) {
@@ -250,12 +322,39 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      <main className="flex-1 p-6 md:p-10 overflow-x-hidden">
-        <header className="mb-10 flex justify-between items-center">
+      <main className="flex-1 p-6 md:p-10 overflow-x-hidden relative">
+        <header className="mb-10 flex justify-between items-center relative">
           <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic underline decoration-amber-500 underline-offset-8">{activeTab}</h2>
-          <button className="lg:hidden w-12 h-12 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center" onClick={() => setIsMobileMenuOpen(true)}>
-            <MenuIcon className="w-6 h-6 text-slate-900" />
-          </button>
+          
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className={`w-12 h-12 rounded-2xl border transition-all flex items-center justify-center relative ${
+                  isNotificationsOpen ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'bg-white text-slate-600 border-slate-200 shadow-sm hover:border-amber-500'
+                }`}
+              >
+                <Bell className={`w-6 h-6 ${unreadCount > 0 ? 'animate-bounce' : ''}`} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white text-[10px] font-black rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-pulse">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+              
+              <NotificationCenter 
+                isOpen={isNotificationsOpen}
+                onClose={() => setIsNotificationsOpen(false)}
+                notifications={notifications}
+                onMarkRead={markNotificationRead}
+                onClear={clearNotifications}
+              />
+            </div>
+
+            <button className="lg:hidden w-12 h-12 bg-white rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center" onClick={() => setIsMobileMenuOpen(true)}>
+              <MenuIcon className="w-6 h-6 text-slate-900" />
+            </button>
+          </div>
         </header>
 
         {!isDataLoaded ? (
@@ -266,7 +365,7 @@ const App: React.FC = () => {
               <>
                 {activeTab === 'dashboard' && <DashboardView />}
                 {activeTab === 'fleet' && <FleetView />}
-                {activeTab === 'finance' && <FinanceView />}
+                {activeTab === 'finance' && <FinanceView refreshGlobalNotifs={refreshData} />}
                 {activeTab === 'risk' && <RiskAIView />}
                 {activeTab === 'settings' && <CompanySettingsView onLogout={handleLogout} />}
               </>
@@ -279,12 +378,17 @@ const App: React.FC = () => {
             )}
             {role === UserRole.ARRENDATARIO && (
               <>
-                {activeTab === 'dashboard' ? <ArrendatarioView /> : <ArrendatarioSettingsView onLogout={handleLogout} />}
+                {activeTab === 'dashboard' ? <ArrendatarioView refreshGlobalNotifs={refreshData} /> : <ArrendatarioSettingsView onLogout={handleLogout} />}
               </>
             )}
           </div>
         )}
       </main>
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+      `}</style>
     </div>
   );
 };
