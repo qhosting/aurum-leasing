@@ -1,52 +1,127 @@
 
-import { Vehicle, Driver, PaymentRecord } from '../types';
-import { MOCK_VEHICLES, MOCK_DRIVERS, MOCK_PAYMENTS } from '../constants';
+import { Vehicle, Driver, PaymentRecord, UserRole, ArrendadoraAccount, ServicePlan } from '../types';
 
 const API_BASE = '/api';
 
+export interface LoginResponse {
+  success: boolean;
+  user?: {
+    id: string;
+    email: string;
+    role: UserRole;
+    tenant_id: string;
+    data: any;
+  };
+  error?: string;
+}
+
 export const persistenceService = {
-  async getVehicles(): Promise<Vehicle[]> {
+  async login(email: string, password: string): Promise<LoginResponse> {
     try {
-      const res = await fetch(`${API_BASE}/fleet`);
-      if (!res.ok) return MOCK_VEHICLES;
-      const data = await res.json();
-      return data.length > 0 ? data : MOCK_VEHICLES;
-    } catch (err) {
-      console.warn('[Aurum] Usando fallback de vehículos local');
-      return MOCK_VEHICLES;
-    }
-  },
-
-  // Added getDrivers to handle driver data retrieval and fix TypeScript property missing error
-  async getDrivers(): Promise<Driver[]> {
-    try {
-      const res = await fetch(`${API_BASE}/drivers`);
-      if (!res.ok) return MOCK_DRIVERS;
-      const data = await res.json();
-      return data.length > 0 ? data : MOCK_DRIVERS;
-    } catch (err) {
-      console.warn('[Aurum] Usando fallback de conductores local');
-      return MOCK_DRIVERS;
-    }
-  },
-
-  async getPendingPayments(): Promise<any[]> {
-    try {
-      const res = await fetch(`${API_BASE}/payments/pending`);
-      if (!res.ok) return [];
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
       return await res.json();
-    } catch (err) {
-      return [];
-    }
+    } catch (err) { return { success: false, error: 'Error de red.' }; }
+  },
+
+  // Driver (Arrendatario) Methods
+  async getDriverMe(driverId: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/driver/me?id=${driverId}`);
+    return await res.json();
+  },
+
+  async getDriverVehicle(driverId: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/driver/vehicle?id=${driverId}`);
+    return await res.json();
+  },
+
+  async getDriverPayments(driverId: string): Promise<any[]> {
+    const res = await fetch(`${API_BASE}/driver/payments?id=${driverId}`);
+    return await res.json();
+  },
+
+  async reportDriverPayment(paymentData: any): Promise<any> {
+    const res = await fetch(`${API_BASE}/payments/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(paymentData)
+    });
+    return await res.json();
+  },
+
+  // Lessor (Arrendador) Methods
+  async getArrendadorStats(tenantId: string = 't1'): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/arrendador/stats?tenant_id=${tenantId}`);
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async getVehicles(tenantId: string = 't1'): Promise<Vehicle[]> {
+    try {
+      const res = await fetch(`${API_BASE}/fleet?tenant_id=${tenantId}`);
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async saveVehicle(vehicle: Partial<Vehicle>, tenantId: string = 't1'): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/fleet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...vehicle, tenant_id: tenantId })
+      });
+      return await res.json();
+    } catch { return { error: 'Network error' }; }
+  },
+
+  async getDrivers(tenantId: string = 't1'): Promise<Driver[]> {
+    try {
+      const res = await fetch(`${API_BASE}/drivers?tenant_id=${tenantId}`);
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async saveDriver(driver: Partial<Driver>, tenantId: string = 't1'): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/drivers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...driver, tenant_id: tenantId })
+      });
+      return await res.json();
+    } catch { return { error: 'Network error' }; }
   },
 
   async getGlobalStats(): Promise<{ visits: number }> {
     try {
       const res = await fetch(`${API_BASE}/stats/visits`);
-      if (!res.ok) return { visits: 1024 };
       return await res.json();
-    } catch {
-      return { visits: 1024 };
-    }
+    } catch { return { visits: 0 }; }
+  },
+
+  // Super Admin Methods
+  async getSuperStats(): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/super/stats`);
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async getSuperTenants(): Promise<ArrendadoraAccount[]> {
+    try {
+      const res = await fetch(`${API_BASE}/super/tenants`);
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async getSuperPlans(): Promise<ServicePlan[]> {
+    try {
+      const res = await fetch(`${API_BASE}/super/plans`);
+      return await res.json();
+    } catch { return []; }
   }
 };

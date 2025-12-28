@@ -38,27 +38,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'dist')));
 
-/**
- * AURUM MIGRATION ENGINE
- * Gestiona el esquema de base de datos de forma incremental y segura.
- */
 const initDb = async () => {
   const client = await pool.connect();
   try {
-    console.log('--- AURUM DATABASE MIGRATION SYSTEM STARTING ---');
     await client.query('BEGIN');
 
-    // 1. Log de Migraciones
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS migrations_log (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    // 2. Esquema Base: Tenants y Planes (Requeridos para FKs)
-    console.log('📦 Migrando esquema base (Tenants/Plans)...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS tenants (
         id TEXT PRIMARY KEY,
@@ -67,174 +51,110 @@ const initDb = async () => {
         data JSONB NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      CREATE TABLE IF NOT EXISTS service_plans (
-        id TEXT PRIMARY KEY,
-        name TEXT UNIQUE NOT NULL,
-        data JSONB NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
 
-    // 3. Usuarios (Auth)
-    console.log('👥 Migrando esquema de usuarios...');
-    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         role TEXT NOT NULL,
+        tenant_id TEXT REFERENCES tenants(id),
         data JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT REFERENCES tenants(id) ON DELETE SET NULL;
-    `);
 
-    // 4. Operaciones (Flota y Conductores)
-    console.log('🚗 Migrando esquema de flota y conductores...');
-    await client.query(`
       CREATE TABLE IF NOT EXISTS vehicles (
         id TEXT PRIMARY KEY,
         plate TEXT UNIQUE NOT NULL,
+        tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+        driver_id TEXT,
         data JSONB NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE;
 
       CREATE TABLE IF NOT EXISTS drivers (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE,
+        tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
         data JSONB NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      ALTER TABLE drivers ADD COLUMN IF NOT EXISTS tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE;
-    `);
 
-    // 5. Finanzas y Legal
-    console.log('💰 Migrando esquema financiero...');
-    await client.query(`
       CREATE TABLE IF NOT EXISTS payments (
         id TEXT PRIMARY KEY,
+        tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+        driver_id TEXT REFERENCES drivers(id) ON DELETE CASCADE,
         amount DECIMAL(12,2) NOT NULL,
         status TEXT DEFAULT 'pending',
         data JSONB NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-      ALTER TABLE payments ADD COLUMN IF NOT EXISTS driver_id TEXT REFERENCES drivers(id) ON DELETE SET NULL;
-      ALTER TABLE payments ADD COLUMN IF NOT EXISTS tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE;
-
-      CREATE TABLE IF NOT EXISTS documents (
-        id TEXT PRIMARY KEY,
-        driver_id TEXT REFERENCES drivers(id) ON DELETE CASCADE,
-        type TEXT NOT NULL,
-        expiry_date DATE,
-        status TEXT DEFAULT 'valid',
-        file_url TEXT,
-        data JSONB,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
     `);
 
-    // 6. Auxilio Vial e Incidencias
-    console.log('🚨 Migrando esquema de incidencias...');
+    // Seed data
     await client.query(`
-      CREATE TABLE IF NOT EXISTS incidents (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        status TEXT DEFAULT 'open',
-        location JSONB,
-        description TEXT,
-        data JSONB,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE;
-      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS driver_id TEXT REFERENCES drivers(id) ON DELETE CASCADE;
-      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS vehicle_id TEXT REFERENCES vehicles(id) ON DELETE CASCADE;
-    `);
-
-    // --- SEEDING DE SEGURIDAD (ROOT ACCESS) ---
-    console.log('🌱 Ejecutando seeding de seguridad Aurum...');
-
-    // Super Admin Seeding - Garantiza acceso al sistema
-    await client.query(`
-      INSERT INTO users (id, email, password, role, data) 
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (email) DO UPDATE SET 
-        password = EXCLUDED.password, 
-        role = EXCLUDED.role,
-        data = EXCLUDED.data`, 
-      ['root-admin', 'root@aurumleasing.mx', 'x0420EZS*', 'Super Admin', { name: 'Aurum Global Controller' }]
-    );
-
-    // Planes Iniciales
-    await client.query(`
-      INSERT INTO service_plans (id, name, data) VALUES 
-      ('p1', 'Basic', '{"price": 199, "fleet_limit": 15}'),
-      ('p2', 'Pro', '{"price": 499, "fleet_limit": 100}'),
-      ('p3', 'Enterprise', '{"price": 1299, "fleet_limit": 10000}')
-      ON CONFLICT (name) DO NOTHING
-    `);
-
-    // Tenant CDMX de ejemplo
-    await client.query(`
-      INSERT INTO tenants (id, company_name, data) 
-      VALUES ('t1', 'Aurum Leasing CDMX', '{"plan": "Enterprise", "region": "Central"}')
-      ON CONFLICT (id) DO NOTHING
+      INSERT INTO tenants (id, company_name, data) VALUES ('t1', 'Aurum Leasing CDMX', '{"plan": "Enterprise"}') ON CONFLICT DO NOTHING;
+      INSERT INTO drivers (id, email, tenant_id, data) VALUES ('d1', 'juan.perez@aurum.mx', 't1', '{"name": "Juan Pérez", "phone": "5215512345678", "rentPlan": "semanal", "amortization": {"totalValue": 250000, "paidPrincipal": 15000}}') ON CONFLICT DO NOTHING;
+      INSERT INTO users (id, email, password, role, tenant_id, data) VALUES ('u1', 'juan.perez@aurum.mx', 'aurum2024', 'Arrendatario', 't1', '{"driver_id": "d1"}') ON CONFLICT DO NOTHING;
+      INSERT INTO vehicles (id, plate, tenant_id, driver_id, data) VALUES ('v1', 'ABC-1234', 't1', 'd1', '{"brand": "Toyota", "model": "Avanza", "year": 2022, "mileage": 45000, "status": "Activo", "verificationExpiry": "2024-12-31"}') ON CONFLICT DO NOTHING;
     `);
 
     await client.query('COMMIT');
-    console.log('✅ Aurum Database System Synchronized & Seeded.');
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('❌ CRITICAL MIGRATION ERROR:', err);
-    (process as any).exit(1);
+    console.error(err);
   } finally {
     client.release();
   }
 };
 
-// --- ENDPOINTS API ---
-
-app.get('/api/fleet', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM vehicles ORDER BY created_at DESC');
-    res.json(result.rows.map(r => ({ id: r.id, plate: r.plate, ...r.data })));
-  } catch (err) { res.status(500).json({ error: 'DB Error' }); }
+// Endpoints
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]);
+  if (r.rows.length > 0) {
+    await redis.incr('global_visits');
+    res.json({ success: true, user: r.rows[0] });
+  } else {
+    res.status(401).json({ success: false, error: 'Credenciales inválidas' });
+  }
 });
 
-app.get('/api/drivers', async (req, res) => {
+app.get('/api/driver/me', async (req, res) => {
+  const driverId = req.query.id || 'd1';
   try {
-    const result = await pool.query('SELECT * FROM drivers ORDER BY created_at DESC');
-    res.json(result.rows.map(r => ({ id: r.id, email: r.email, ...r.data })));
-  } catch (err) { res.status(500).json({ error: 'DB Error' }); }
+    const driver = await pool.query('SELECT * FROM drivers WHERE id = $1', [driverId]);
+    const payments = await pool.query('SELECT SUM(amount) as balance FROM payments WHERE driver_id = $1 AND status = \'verified\'', [driverId]);
+    res.json({ ...driver.rows[0], balance: parseFloat(payments.rows[0].balance || '0') });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/payments/pending', async (req, res) => {
+app.get('/api/driver/vehicle', async (req, res) => {
+  const driverId = req.query.id || 'd1';
+  const r = await pool.query('SELECT * FROM vehicles WHERE driver_id = $1', [driverId]);
+  res.json(r.rows[0] ? { id: r.rows[0].id, plate: r.rows[0].plate, ...r.rows[0].data } : null);
+});
+
+app.get('/api/driver/payments', async (req, res) => {
+  const driverId = req.query.id || 'd1';
+  const r = await pool.query('SELECT * FROM payments WHERE driver_id = $1 ORDER BY created_at DESC', [driverId]);
+  res.json(r.rows.map(p => ({ id: p.id, amount: p.amount, date: p.created_at, status: p.status, ...p.data })));
+});
+
+app.post('/api/payments/report', async (req, res) => {
+  const { driver_id, tenant_id, amount, ...data } = req.body;
+  const id = `p-${Date.now()}`;
   try {
-    const result = await pool.query(`
-      SELECT p.*, d.data->>'name' as driver_name 
-      FROM payments p 
-      JOIN drivers d ON p.driver_id = d.id 
-      WHERE p.status = 'pending'
-    `);
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: 'DB Error' }); }
+    await pool.query('INSERT INTO payments (id, driver_id, tenant_id, amount, status, data) VALUES ($1, $2, $3, $4, $5, $6)', 
+      [id, driver_id, tenant_id, amount, 'pending', data]);
+    res.json({ success: true, id });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/stats/visits', async (req, res) => {
-  try {
-    const visits = await redis.incr('global_visits');
-    res.json({ visits });
-  } catch (err) { res.json({ visits: 1024 }); }
+  const visits = await redis.get('global_visits');
+  res.json({ visits: parseInt(visits || '0') });
 });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
 
-initDb().then(() => {
-  app.listen(port, () => {
-    console.log(`🚀 Aurum Enterprise Server running on port ${port}`);
-  });
-});
+initDb().then(() => app.listen(port, () => console.log(`🚀 Server on ${port}`)));

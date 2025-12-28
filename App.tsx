@@ -181,6 +181,7 @@ const App: React.FC = () => {
     setRole(selectedRole);
     setView('app');
     localStorage.setItem('aurum_session_role', selectedRole);
+    refreshData(); // Recargar datos tras login
   };
 
   const handleLogout = useCallback(() => {
@@ -294,25 +295,24 @@ const LoginView: React.FC<{ onLogin: (role: UserRole) => void; onBack: () => voi
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
-    // Lógica de producción: Determinación de rol basada en identidad corporativa
-    setTimeout(() => {
-      if (email.endsWith('@admin.mx')) {
-        onLogin(UserRole.SUPER_ADMIN);
-      } else if (email.endsWith('@aurum.mx')) {
-        onLogin(UserRole.ARRENDADOR);
-      } else if (email === 'demo@aurum.mx' || email.length > 5) {
-        // Por defecto, cualquier otro registro válido es un chofer/arrendatario
-        onLogin(UserRole.ARRENDATARIO);
+    try {
+      const response = await persistenceService.login(email, password);
+      
+      if (response.success && response.user) {
+        onLogin(response.user.role);
       } else {
-        setError('Credenciales no válidas para el sistema Aurum.');
+        setError(response.error || 'Credenciales no válidas para el sistema Aurum.');
       }
+    } catch (err) {
+      setError('Error crítico de conexión. Reintente más tarde.');
+    } finally {
       setIsLoading(false);
-    }, 1200);
+    }
   };
 
   return (
