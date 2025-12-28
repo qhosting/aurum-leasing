@@ -33,6 +33,15 @@ export const persistenceService = {
     return await res.json();
   },
 
+  async updateDriverProfile(driverId: string, data: any): Promise<any> {
+    const res = await fetch(`${API_BASE}/driver/profile`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: driverId, data })
+    });
+    return await res.json();
+  },
+
   async getDriverVehicle(driverId: string): Promise<any> {
     const res = await fetch(`${API_BASE}/driver/vehicle?id=${driverId}`);
     return await res.json();

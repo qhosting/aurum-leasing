@@ -62,19 +62,20 @@ const initDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE TABLE IF NOT EXISTS vehicles (
-        id TEXT PRIMARY KEY,
-        plate TEXT UNIQUE NOT NULL,
-        tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
-        driver_id TEXT,
-        data JSONB NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
       CREATE TABLE IF NOT EXISTS drivers (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE,
         tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+        data JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS vehicles (
+        id TEXT PRIMARY KEY,
+        plate TEXT UNIQUE NOT NULL,
+        tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+        driver_id TEXT REFERENCES drivers(id) ON DELETE SET NULL,
         data JSONB NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -90,18 +91,42 @@ const initDb = async () => {
       );
     `);
 
-    // Seed data
+    // Seed data con campos extendidos para el Arrendatario
     await client.query(`
-      INSERT INTO tenants (id, company_name, data) VALUES ('t1', 'Aurum Leasing CDMX', '{"plan": "Enterprise"}') ON CONFLICT DO NOTHING;
-      INSERT INTO drivers (id, email, tenant_id, data) VALUES ('d1', 'juan.perez@aurum.mx', 't1', '{"name": "Juan Pérez", "phone": "5215512345678", "rentPlan": "semanal", "amortization": {"totalValue": 250000, "paidPrincipal": 15000}}') ON CONFLICT DO NOTHING;
-      INSERT INTO users (id, email, password, role, tenant_id, data) VALUES ('u1', 'juan.perez@aurum.mx', 'aurum2024', 'Arrendatario', 't1', '{"driver_id": "d1"}') ON CONFLICT DO NOTHING;
-      INSERT INTO vehicles (id, plate, tenant_id, driver_id, data) VALUES ('v1', 'ABC-1234', 't1', 'd1', '{"brand": "Toyota", "model": "Avanza", "year": 2022, "mileage": 45000, "status": "Activo", "verificationExpiry": "2024-12-31"}') ON CONFLICT DO NOTHING;
+      INSERT INTO tenants (id, company_name, data) 
+      VALUES ('t1', 'Aurum Leasing CDMX', '{"plan": "Enterprise"}') 
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO drivers (id, email, tenant_id, data) 
+      VALUES ('d1', 'juan.perez@aurum.mx', 't1', '{
+        "name": "Juan Pérez", 
+        "phone": "5215512345678", 
+        "address": "Av. Reforma 222, CDMX",
+        "emergencyName": "Marta Pérez",
+        "emergencyPhone": "5511223344",
+        "emergencyRel": "Esposa",
+        "rentPlan": "semanal", 
+        "amortization": {"totalValue": 250000, "paidPrincipal": 18500}
+      }') 
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO users (id, email, password, role, tenant_id, data) 
+      VALUES ('u1', 'juan.perez@aurum.mx', 'aurum2024', 'Arrendatario', 't1', '{"driver_id": "d1"}') 
+      ON CONFLICT DO NOTHING;
+      
+      INSERT INTO vehicles (id, plate, tenant_id, driver_id, data) 
+      VALUES ('v1', 'ABC-1234', 't1', 'd1', '{"brand": "Toyota", "model": "Avanza", "year": 2022, "status": "Activo", "verificationExpiry": "2024-12-31"}') 
+      ON CONFLICT DO NOTHING;
+
+      INSERT INTO payments (id, tenant_id, driver_id, amount, status, data)
+      VALUES ('p-seed-1', 't1', 'd1', 3500.00, 'verified', '{"type": "renta", "date": "2024-05-10"}')
+      ON CONFLICT DO NOTHING;
     `);
 
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
+    console.error('DB INIT ERROR:', err);
   } finally {
     client.release();
   }
@@ -125,6 +150,17 @@ app.get('/api/driver/me', async (req, res) => {
     const driver = await pool.query('SELECT * FROM drivers WHERE id = $1', [driverId]);
     const payments = await pool.query('SELECT SUM(amount) as balance FROM payments WHERE driver_id = $1 AND status = \'verified\'', [driverId]);
     res.json({ ...driver.rows[0], balance: parseFloat(payments.rows[0].balance || '0') });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/driver/profile', async (req, res) => {
+  const { id, data } = req.body;
+  try {
+    await pool.query(
+      'UPDATE drivers SET data = data || $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [JSON.stringify(data), id]
+    );
+    res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -157,4 +193,4 @@ app.get('/api/stats/visits', async (req, res) => {
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
 
-initDb().then(() => app.listen(port, () => console.log(`🚀 Server on ${port}`)));
+initDb().then(() => app.listen(port, () => console.log(`🚀 Aurum Cloud Active on ${port}`)));

@@ -2,7 +2,7 @@
 # --- ETAPA 1: COMPILACIÓN ---
 FROM node:20-alpine AS builder
 
-# Dependencias para compilación de módulos nativos
+# Dependencias para compilación de módulos nativos (pg, node-gyp)
 RUN apk add --no-cache python3 make g++ bash
 
 WORKDIR /app
@@ -11,7 +11,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --legacy-peer-deps
 
-# Copiar código y compilar
+# Copiar código y compilar cliente/servidor
 COPY . .
 RUN npm run build
 
@@ -21,16 +21,20 @@ LABEL maintainer="Aurum Engineering <dev@aurum.mx>"
 
 WORKDIR /app
 
-# Copiar solo lo necesario para ejecución
+# Copiar distancias de cliente y servidor compilado
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/package*.json ./
 
-# Instalar dependencias de producción
+# Instalar solo dependencias de producción para optimizar imagen
 RUN npm install --production --legacy-peer-deps && npm cache clean --force
 
 ENV NODE_ENV=production
 ENV PORT=3000
+
+# Aurum Database Connection (inyectada por entorno)
+# DATABASE_URL
+# REDIS_URL
 
 EXPOSE 3000
 
