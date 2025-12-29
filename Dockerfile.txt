@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Se utiliza 'npm install' para evitar errores de ausencia de lockfile en el CI
+# Se utiliza 'npm install' para despliegues dinámicos
 RUN npm install --legacy-peer-deps
 
 # --- ETAPA 2: COMPILACIÓN ---

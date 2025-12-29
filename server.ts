@@ -41,9 +41,9 @@ app.use(express.static(path.join(__dirname, 'dist')) as any);
 const initDb = async () => {
   const client = await pool.connect();
   try {
-    console.log('📦 Aurum System: Iniciando Sincronización de Esquema y Datos...');
+    console.log('📦 Aurum System: Iniciando Migración Robusta de DB...');
     
-    // 1. Crear tablas base si no existen
+    // 1. Tablas Base
     await client.query(`
       CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY);
@@ -53,68 +53,83 @@ const initDb = async () => {
       CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY);
     `);
 
-    // 2. Función auxiliar para ejecutar migraciones seguras
+    // 2. Migración Dinámica de Columnas
     const migrateColumn = async (table: string, column: string, definition: string) => {
-      await client.query(`
-        DO $$ BEGIN 
-          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '${table}' AND column_name = '${column}') THEN 
-            ALTER TABLE ${table} ADD COLUMN ${column} ${definition};
-          END IF; 
-        END $$;
+      const checkRes = await client.query(`
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = '${table}' AND column_name = '${column}'
       `);
+      if (checkRes.rows.length === 0) {
+        await client.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      }
     };
 
-    // 3. Definición de columnas
-    await migrateColumn('tenants', 'company_name', 'TEXT NOT NULL DEFAULT \'Sin Nombre\'');
-    await migrateColumn('tenants', 'status', 'TEXT DEFAULT \'active\'');
-    await migrateColumn('tenants', 'data', 'JSONB NOT NULL DEFAULT \'{}\'');
-    await migrateColumn('tenants', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    await migrateColumn('tenants', 'company_name', "TEXT NOT NULL DEFAULT 'Sin Nombre'");
+    await migrateColumn('tenants', 'status', "TEXT DEFAULT 'active'");
+    await migrateColumn('tenants', 'data', "JSONB NOT NULL DEFAULT '{}'");
+    await migrateColumn('tenants', 'created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
 
-    await migrateColumn('users', 'email', 'TEXT UNIQUE');
-    await migrateColumn('users', 'password', 'TEXT');
-    await migrateColumn('users', 'role', 'TEXT');
-    await migrateColumn('users', 'tenant_id', 'TEXT REFERENCES tenants(id)');
-    await migrateColumn('users', 'data', 'JSONB DEFAULT \'{}\'');
+    await migrateColumn('users', 'email', "TEXT UNIQUE");
+    await migrateColumn('users', 'password', "TEXT");
+    await migrateColumn('users', 'role', "TEXT");
+    await migrateColumn('users', 'tenant_id', "TEXT REFERENCES tenants(id)");
+    await migrateColumn('users', 'data', "JSONB NOT NULL DEFAULT '{}'");
 
-    await migrateColumn('drivers', 'email', 'TEXT UNIQUE');
-    await migrateColumn('drivers', 'tenant_id', 'TEXT REFERENCES tenants(id)');
-    await migrateColumn('drivers', 'data', 'JSONB NOT NULL DEFAULT \'{}\'');
+    await migrateColumn('drivers', 'email', "TEXT UNIQUE");
+    await migrateColumn('drivers', 'tenant_id', "TEXT REFERENCES tenants(id)");
+    await migrateColumn('drivers', 'data', "JSONB NOT NULL DEFAULT '{}'");
 
-    await migrateColumn('vehicles', 'plate', 'TEXT UNIQUE');
-    await migrateColumn('vehicles', 'tenant_id', 'TEXT REFERENCES tenants(id)');
-    await migrateColumn('vehicles', 'driver_id', 'TEXT REFERENCES drivers(id)');
-    await migrateColumn('vehicles', 'data', 'JSONB NOT NULL DEFAULT \'{}\'');
+    await migrateColumn('vehicles', 'plate', "TEXT UNIQUE");
+    await migrateColumn('vehicles', 'tenant_id', "TEXT REFERENCES tenants(id)");
+    await migrateColumn('vehicles', 'driver_id', "TEXT REFERENCES drivers(id)");
+    await migrateColumn('vehicles', 'data', "JSONB NOT NULL DEFAULT '{}'");
 
-    await migrateColumn('payments', 'tenant_id', 'TEXT REFERENCES tenants(id)');
-    await migrateColumn('payments', 'driver_id', 'TEXT REFERENCES drivers(id)');
-    await migrateColumn('payments', 'amount', 'DECIMAL(12,2)');
-    await migrateColumn('payments', 'status', 'TEXT DEFAULT \'pending\'');
-    await migrateColumn('payments', 'data', 'JSONB NOT NULL DEFAULT \'{}\'');
+    await migrateColumn('payments', 'tenant_id', "TEXT REFERENCES tenants(id)");
+    await migrateColumn('payments', 'driver_id', "TEXT REFERENCES drivers(id)");
+    await migrateColumn('payments', 'amount', "DECIMAL(12,2)");
+    await migrateColumn('payments', 'status', "TEXT DEFAULT 'pending'");
+    await migrateColumn('payments', 'data', "JSONB NOT NULL DEFAULT '{}'");
 
-    await migrateColumn('notifications', 'user_id', 'TEXT');
-    await migrateColumn('notifications', 'role_target', 'TEXT');
-    await migrateColumn('notifications', 'title', 'TEXT NOT NULL DEFAULT \'Aviso\'');
-    await migrateColumn('notifications', 'message', 'TEXT NOT NULL DEFAULT \'-\'');
-    await migrateColumn('notifications', 'type', 'TEXT NOT NULL DEFAULT \'system\'');
-    await migrateColumn('notifications', 'read', 'BOOLEAN DEFAULT FALSE');
-    await migrateColumn('notifications', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    await migrateColumn('notifications', 'user_id', "TEXT");
+    await migrateColumn('notifications', 'role_target', "TEXT");
+    await migrateColumn('notifications', 'title', "TEXT NOT NULL DEFAULT 'Aviso'");
+    await migrateColumn('notifications', 'message', "TEXT NOT NULL DEFAULT '-'");
+    await migrateColumn('notifications', 'type', "TEXT NOT NULL DEFAULT 'system'");
+    await migrateColumn('notifications', 'read', "BOOLEAN DEFAULT FALSE");
+    await migrateColumn('notifications', 'created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
 
-    // 4. Semillas de datos (Users para Login)
-    // Se añade explícitamente la columna 'data' para evitar errores de restricción NOT NULL
+    // 3. Población Determinista (Upsert)
+    await client.query("BEGIN");
+    
     await client.query(`
-      INSERT INTO tenants (id, company_name, data) VALUES ('t1', 'Aurum Leasing Demo', '{}') ON CONFLICT (id) DO NOTHING;
+      INSERT INTO tenants (id, company_name, data) 
+      VALUES ('t1', 'Aurum Leasing Demo', '{}') 
+      ON CONFLICT (id) DO UPDATE SET company_name = EXCLUDED.company_name, data = EXCLUDED.data;
+    `);
+
+    await client.query(`
       INSERT INTO users (id, email, password, role, tenant_id, data) VALUES 
         ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL, '{}'),
         ('u2', 'pro@aurum.mx', 'pro123', 'Arrendador', 't1', '{}'),
         ('u3', 'chofer@aurum.mx', 'chofer123', 'Arrendatario', 't1', '{}')
-      ON CONFLICT (email) DO NOTHING;
-      INSERT INTO drivers (id, email, tenant_id, data) VALUES 
-        ('d1', 'chofer@aurum.mx', 't1', '{"name": "Juan Chofer", "balance": 0, "amortization": {"paidPrincipal": 5000, "totalValue": 25000}}')
-      ON CONFLICT (email) DO NOTHING;
+      ON CONFLICT (id) DO UPDATE SET 
+        email = EXCLUDED.email, 
+        password = EXCLUDED.password, 
+        role = EXCLUDED.role, 
+        data = EXCLUDED.data;
     `);
 
-    console.log('✅ Aurum System: Base de Datos sincronizada y poblada.');
+    await client.query(`
+      INSERT INTO drivers (id, email, tenant_id, data) 
+      VALUES ('d1', 'chofer@aurum.mx', 't1', '{"name": "Juan Chofer", "balance": 0, "amortization": {"paidPrincipal": 5000, "totalValue": 25000}}')
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, data = EXCLUDED.data;
+    `);
+
+    await client.query("COMMIT");
+    console.log('✅ Aurum System: Esquema verificado y migrado con éxito.');
+
   } catch (err: any) {
+    await client.query("ROLLBACK").catch(() => {});
     console.error('❌ Aurum System DB Error:', err.message);
   } finally {
     client.release();
@@ -122,7 +137,6 @@ const initDb = async () => {
 };
 
 // --- ENDPOINTS ---
-
 app.post('/api/auth/login', async (req: any, res: any) => {
   const { email, password } = req.body;
   try {
@@ -132,7 +146,7 @@ app.post('/api/auth/login', async (req: any, res: any) => {
       await redis.incr('global_visits');
       res.json({ success: true, user });
     } else {
-      res.status(401).json({ success: false, error: 'Credenciales no encontradas en el sistema Aurum.' });
+      res.status(401).json({ success: false, error: 'Credenciales inválidas.' });
     }
   } catch (err: any) { res.status(500).json({ error: err.message }); }
 });
@@ -168,7 +182,7 @@ app.post('/api/payments/report', async (req: any, res: any) => {
     await pool.query('INSERT INTO payments (id, driver_id, tenant_id, amount, status, data) VALUES ($1, $2, $3, $4, $5, $6)', 
       [id, driver_id, tenant_id, amount, 'pending', JSON.stringify(data)]);
     await pool.query('INSERT INTO notifications (id, role_target, title, message, type) VALUES ($1, $2, $3, $4, $5)',
-      [notifId, 'Arrendador', 'Nuevo Pago Reportado', `Monto: $${amount} de chofer ID: ${driver_id}`, 'payment']);
+      [notifId, 'Arrendador', 'Nuevo Pago Reportado', `Monto: $${amount}`, 'payment']);
     await pool.query('COMMIT');
     res.json({ success: true, id });
   } catch (err: any) { await pool.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
