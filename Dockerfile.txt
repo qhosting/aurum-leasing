@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# NOTA: Se utiliza 'npm install' ya que 'npm ci' requiere un package-lock.json que no está presente.
+# Se utiliza 'npm install' para evitar errores de ausencia de lockfile en el CI
 RUN npm install --legacy-peer-deps
 
 # --- ETAPA 2: COMPILACIÓN ---
