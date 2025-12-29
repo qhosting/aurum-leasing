@@ -100,12 +100,13 @@ const initDb = async () => {
     await migrateColumn('notifications', 'created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
 
     // 4. Semillas de datos (Users para Login)
+    // Se añade explícitamente la columna 'data' para evitar errores de restricción NOT NULL
     await client.query(`
-      INSERT INTO tenants (id, company_name) VALUES ('t1', 'Aurum Leasing Demo') ON CONFLICT DO NOTHING;
-      INSERT INTO users (id, email, password, role, tenant_id) VALUES 
-        ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL),
-        ('u2', 'pro@aurum.mx', 'pro123', 'Arrendador', 't1'),
-        ('u3', 'chofer@aurum.mx', 'chofer123', 'Arrendatario', 't1')
+      INSERT INTO tenants (id, company_name, data) VALUES ('t1', 'Aurum Leasing Demo', '{}') ON CONFLICT (id) DO NOTHING;
+      INSERT INTO users (id, email, password, role, tenant_id, data) VALUES 
+        ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL, '{}'),
+        ('u2', 'pro@aurum.mx', 'pro123', 'Arrendador', 't1', '{}'),
+        ('u3', 'chofer@aurum.mx', 'chofer123', 'Arrendatario', 't1', '{}')
       ON CONFLICT (email) DO NOTHING;
       INSERT INTO drivers (id, email, tenant_id, data) VALUES 
         ('d1', 'chofer@aurum.mx', 't1', '{"name": "Juan Chofer", "balance": 0, "amortization": {"paidPrincipal": 5000, "totalValue": 25000}}')
