@@ -4,8 +4,6 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package*.json ./
-
-# Se utiliza 'npm install' para despliegues dinámicos
 RUN npm install --legacy-peer-deps
 
 # --- ETAPA 2: COMPILACIÓN ---

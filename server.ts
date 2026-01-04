@@ -41,168 +41,192 @@ app.use(express.static(path.join(__dirname, 'dist')) as any);
 const initDb = async () => {
   const client = await pool.connect();
   try {
-    console.log('📦 Aurum System: Iniciando Migración Robusta de DB...');
-    
-    // 1. Tablas Base
+    console.log('📦 Aurum System: Sincronizando Esquema Maestro...');
     await client.query(`
+      CREATE TABLE IF NOT EXISTS plans (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS drivers (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS vehicles (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS contracts (id TEXT PRIMARY KEY);
+      CREATE TABLE IF NOT EXISTS maintenance_records (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY);
     `);
 
-    // 2. Migración Dinámica de Columnas
-    const migrateColumn = async (table: string, column: string, definition: string) => {
-      const checkRes = await client.query(`
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' AND table_name = '${table}' AND column_name = '${column}'
-      `);
-      if (checkRes.rows.length === 0) {
-        await client.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-      }
+    const ensureColumn = async (table: string, column: string, type: string, defaultValue: string) => {
+      const res = await client.query(`SELECT column_name FROM information_schema.columns WHERE table_name = '${table}' AND column_name = '${column}'`);
+      if (res.rows.length === 0) await client.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${type} DEFAULT ${defaultValue}`);
+      await client.query(`UPDATE ${table} SET ${column} = ${defaultValue} WHERE ${column} IS NULL`);
+      await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`);
+      await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET DEFAULT ${defaultValue}`);
     };
 
-    await migrateColumn('tenants', 'company_name', "TEXT NOT NULL DEFAULT 'Sin Nombre'");
-    await migrateColumn('tenants', 'status', "TEXT DEFAULT 'active'");
-    await migrateColumn('tenants', 'data', "JSONB NOT NULL DEFAULT '{}'");
-    await migrateColumn('tenants', 'created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+    // SaaS
+    await ensureColumn('plans', 'name', 'TEXT', "'Basic'");
+    await ensureColumn('plans', 'monthly_price', 'DECIMAL(10,2)', '0');
+    await ensureColumn('plans', 'features', 'JSONB', "'[]'");
+    await ensureColumn('plans', 'color', 'TEXT', "'slate'");
+    await ensureColumn('tenants', 'company_name', 'TEXT', "'Empresa Nueva'");
+    await ensureColumn('tenants', 'plan_id', 'TEXT', "'p1'");
+    await ensureColumn('tenants', 'status', 'TEXT', "'active'");
 
-    await migrateColumn('users', 'email', "TEXT UNIQUE");
-    await migrateColumn('users', 'password', "TEXT");
-    await migrateColumn('users', 'role', "TEXT");
-    await migrateColumn('users', 'tenant_id', "TEXT REFERENCES tenants(id)");
-    await migrateColumn('users', 'data', "JSONB NOT NULL DEFAULT '{}'");
+    // Users
+    await ensureColumn('users', 'email', 'TEXT', "''");
+    await ensureColumn('users', 'password', 'TEXT', "'123'");
+    await ensureColumn('users', 'role', 'TEXT', "'Arrendatario'");
+    await ensureColumn('users', 'tenant_id', 'TEXT', "NULL");
+    await ensureColumn('drivers', 'tenant_id', 'TEXT', "NULL");
+    await ensureColumn('drivers', 'email', 'TEXT', "''");
+    await ensureColumn('drivers', 'balance', 'DECIMAL(12,2)', '0');
+    await ensureColumn('drivers', 'data', 'JSONB', "'{}'");
 
-    await migrateColumn('drivers', 'email', "TEXT UNIQUE");
-    await migrateColumn('drivers', 'tenant_id', "TEXT REFERENCES tenants(id)");
-    await migrateColumn('drivers', 'data', "JSONB NOT NULL DEFAULT '{}'");
+    // Fleet
+    await ensureColumn('vehicles', 'plate', 'TEXT', "''");
+    await ensureColumn('vehicles', 'brand', 'TEXT', "''");
+    await ensureColumn('vehicles', 'model', 'TEXT', "''");
+    await ensureColumn('vehicles', 'status', 'TEXT', "'Disponible'");
+    await ensureColumn('vehicles', 'tenant_id', 'TEXT', "NULL");
+    await ensureColumn('vehicles', 'driver_id', 'TEXT', "NULL");
+    await ensureColumn('vehicles', 'data', 'JSONB', "'{}'");
 
-    await migrateColumn('vehicles', 'plate', "TEXT UNIQUE");
-    await migrateColumn('vehicles', 'tenant_id', "TEXT REFERENCES tenants(id)");
-    await migrateColumn('vehicles', 'driver_id', "TEXT REFERENCES drivers(id)");
-    await migrateColumn('vehicles', 'data', "JSONB NOT NULL DEFAULT '{}'");
+    // Financial
+    await ensureColumn('payments', 'tenant_id', 'TEXT', "NULL");
+    await ensureColumn('payments', 'driver_id', 'TEXT', "NULL");
+    await ensureColumn('payments', 'amount', 'DECIMAL(12,2)', '0');
+    await ensureColumn('payments', 'status', 'TEXT', "'pending'");
+    await ensureColumn('payments', 'type', 'TEXT', "'renta'");
+    await ensureColumn('payments', 'data', 'JSONB', "'{}'");
+    await ensureColumn('payments', 'created_at', 'TIMESTAMP', 'CURRENT_TIMESTAMP');
 
-    await migrateColumn('payments', 'tenant_id', "TEXT REFERENCES tenants(id)");
-    await migrateColumn('payments', 'driver_id', "TEXT REFERENCES drivers(id)");
-    await migrateColumn('payments', 'amount', "DECIMAL(12,2)");
-    await migrateColumn('payments', 'status', "TEXT DEFAULT 'pending'");
-    await migrateColumn('payments', 'data', "JSONB NOT NULL DEFAULT '{}'");
+    // Notifications
+    await ensureColumn('notifications', 'user_id', 'TEXT', "NULL");
+    await ensureColumn('notifications', 'role_target', 'TEXT', "NULL");
+    await ensureColumn('notifications', 'title', 'TEXT', "''");
+    await ensureColumn('notifications', 'message', 'TEXT', "''");
+    await ensureColumn('notifications', 'type', 'TEXT', "'system'");
+    await ensureColumn('notifications', 'read', 'BOOLEAN', 'FALSE');
+    await ensureColumn('notifications', 'created_at', 'TIMESTAMP', 'CURRENT_TIMESTAMP');
 
-    await migrateColumn('notifications', 'user_id', "TEXT");
-    await migrateColumn('notifications', 'role_target', "TEXT");
-    await migrateColumn('notifications', 'title', "TEXT NOT NULL DEFAULT 'Aviso'");
-    await migrateColumn('notifications', 'message', "TEXT NOT NULL DEFAULT '-'");
-    await migrateColumn('notifications', 'type', "TEXT NOT NULL DEFAULT 'system'");
-    await migrateColumn('notifications', 'read', "BOOLEAN DEFAULT FALSE");
-    await migrateColumn('notifications', 'created_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
-
-    // 3. Población Determinista (Upsert)
     await client.query("BEGIN");
-    
-    await client.query(`
-      INSERT INTO tenants (id, company_name, data) 
-      VALUES ('t1', 'Aurum Leasing Demo', '{}') 
-      ON CONFLICT (id) DO UPDATE SET company_name = EXCLUDED.company_name, data = EXCLUDED.data;
-    `);
-
-    await client.query(`
-      INSERT INTO users (id, email, password, role, tenant_id, data) VALUES 
-        ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL, '{}'),
-        ('u2', 'pro@aurum.mx', 'pro123', 'Arrendador', 't1', '{}'),
-        ('u3', 'chofer@aurum.mx', 'chofer123', 'Arrendatario', 't1', '{}')
-      ON CONFLICT (id) DO UPDATE SET 
-        email = EXCLUDED.email, 
-        password = EXCLUDED.password, 
-        role = EXCLUDED.role, 
-        data = EXCLUDED.data;
-    `);
-
-    await client.query(`
-      INSERT INTO drivers (id, email, tenant_id, data) 
-      VALUES ('d1', 'chofer@aurum.mx', 't1', '{"name": "Juan Chofer", "balance": 0, "amortization": {"paidPrincipal": 5000, "totalValue": 25000}}')
-      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, data = EXCLUDED.data;
-    `);
-
+    await client.query(`INSERT INTO plans (id, name, monthly_price, color, features) VALUES ('p1', 'Basic', 199, 'slate', '["Gestión Flota"]'), ('p2', 'Pro', 499, 'amber', '["IA Gemini Lite"]'), ('p3', 'Enterprise', 1299, 'indigo', '["IA Pro Full"]') ON CONFLICT (id) DO UPDATE SET monthly_price = EXCLUDED.monthly_price;`);
+    await client.query(`INSERT INTO tenants (id, company_name, plan_id) VALUES ('t1', 'Aurum Leasing Demo', 'p3') ON CONFLICT (id) DO UPDATE SET company_name = EXCLUDED.company_name;`);
+    await client.query(`INSERT INTO users (id, email, password, role, tenant_id) VALUES ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL), ('u2', 'pro@aurum.mx', 'pro123', 'Arrendador', 't1'), ('u3', 'chofer@aurum.mx', 'chofer123', 'Arrendatario', 't1') ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;`);
+    await client.query(`INSERT INTO drivers (id, email, tenant_id, balance, data) VALUES ('d1', 'chofer@aurum.mx', 't1', 0, '{"name": "Juan Pérez", "amortization": {"paidPrincipal": 5000, "totalValue": 25000}}') ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;`);
+    await client.query(`INSERT INTO vehicles (id, plate, brand, model, status, tenant_id, driver_id) VALUES ('v1', 'ABC-123', 'Toyota', 'Avanza', 'Activo', 't1', 'd1'), ('v2', 'XYZ-987', 'Nissan', 'Versa', 'Disponible', 't1', NULL) ON CONFLICT (id) DO NOTHING;`);
     await client.query("COMMIT");
-    console.log('✅ Aurum System: Esquema verificado y migrado con éxito.');
-
+    console.log('✅ Aurum System: DB Sincronizada.');
   } catch (err: any) {
     await client.query("ROLLBACK").catch(() => {});
-    console.error('❌ Aurum System DB Error:', err.message);
-  } finally {
-    client.release();
-  }
+    console.error('❌ DB Error:', err.message);
+  } finally { client.release(); }
 };
 
-// --- ENDPOINTS ---
-app.post('/api/auth/login', async (req: any, res: any) => {
+// --- AUTH ---
+app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
-  try {
-    const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]);
-    if (r.rows.length > 0) {
-      const user = r.rows[0];
-      await redis.incr('global_visits');
-      res.json({ success: true, user });
-    } else {
-      res.status(401).json({ success: false, error: 'Credenciales inválidas.' });
-    }
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+  const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]);
+  if (r.rows.length > 0) { await redis.incr('global_visits'); res.json({ success: true, user: r.rows[0] }); }
+  else res.status(401).json({ success: false, error: 'Credenciales inválidas.' });
 });
 
-app.get('/api/notifications', async (req: any, res: any) => {
-  const { role, user_id } = req.query;
-  try {
-    const r = await pool.query(
-      'SELECT * FROM notifications WHERE (role_target = $1 OR user_id = $2) AND read = FALSE ORDER BY created_at DESC LIMIT 50',
-      [role || null, user_id || null]
-    );
-    res.json(r.rows.map(n => ({
-      ...n,
-      timestamp: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    })));
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+// --- FLEET ---
+app.get('/api/fleet', async (req, res) => {
+  const { tenant_id } = req.query;
+  const r = await pool.query('SELECT * FROM vehicles WHERE tenant_id = $1', [tenant_id || 't1']);
+  res.json(r.rows);
 });
 
-app.post('/api/notifications/read', async (req: any, res: any) => {
-  const { id } = req.body;
-  try {
-    await pool.query('UPDATE notifications SET read = TRUE WHERE id = $1', [id]);
-    res.json({ success: true });
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+app.post('/api/fleet', async (req, res) => {
+  const { plate, brand, model, tenant_id } = req.body;
+  const id = `v-${Date.now()}`;
+  await pool.query('INSERT INTO vehicles (id, plate, brand, model, tenant_id) VALUES ($1, $2, $3, $4, $5)', [id, plate, brand, model, tenant_id]);
+  res.json({ success: true, id });
 });
 
-app.post('/api/payments/report', async (req: any, res: any) => {
-  const { driver_id, tenant_id, amount, ...data } = req.body;
+// --- PAYMENTS & FINANCE ---
+app.post('/api/payments/report', async (req, res) => {
+  const { driver_id, tenant_id, amount, type } = req.body;
   const id = `p-${Date.now()}`;
-  const notifId = `n-${Date.now()}`;
+  await pool.query('INSERT INTO payments (id, driver_id, tenant_id, amount, type, status) VALUES ($1, $2, $3, $4, $5, $6)', [id, driver_id, tenant_id, amount, type || 'renta', 'pending']);
+  await pool.query('INSERT INTO notifications (id, role_target, title, message, type) VALUES ($1, $2, $3, $4, $5)', [`n-${id}`, 'Arrendador', 'Pago Reportado', `Monto: $${amount}`, 'payment']);
+  res.json({ success: true, id });
+});
+
+app.post('/api/payments/verify', async (req, res) => {
+  const { payment_id, driver_id, amount } = req.body;
   try {
     await pool.query('BEGIN');
-    await pool.query('INSERT INTO payments (id, driver_id, tenant_id, amount, status, data) VALUES ($1, $2, $3, $4, $5, $6)', 
-      [id, driver_id, tenant_id, amount, 'pending', JSON.stringify(data)]);
-    await pool.query('INSERT INTO notifications (id, role_target, title, message, type) VALUES ($1, $2, $3, $4, $5)',
-      [notifId, 'Arrendador', 'Nuevo Pago Reportado', `Monto: $${amount}`, 'payment']);
+    await pool.query('UPDATE payments SET status = "verified" WHERE id = $1', [payment_id]);
+    await pool.query('UPDATE drivers SET balance = balance + $1 WHERE id = $2', [amount, driver_id]);
+    await pool.query('INSERT INTO notifications (id, user_id, title, message, type) VALUES ($1, $2, $3, $4, $5)', [`n-v-${payment_id}`, driver_id, 'Pago Verificado', `Tu saldo ha sido actualizado en $${amount}`, 'payment']);
     await pool.query('COMMIT');
-    res.json({ success: true, id });
-  } catch (err: any) { await pool.query('ROLLBACK'); res.status(500).json({ error: err.message }); }
+    res.json({ success: true });
+  } catch (e) { await pool.query('ROLLBACK'); res.status(500).json({ success: false }); }
 });
 
-app.get('/api/driver/me', async (req: any, res: any) => {
-  const driverId = req.query.id as string;
-  try {
-    const r = await pool.query('SELECT * FROM drivers WHERE id = $1', [driverId || 'd1']);
-    res.json(r.rows[0] || null);
-  } catch (err: any) { res.status(500).json({ error: err.message }); }
+app.get('/api/arrendador/stats', async (req, res) => {
+  const { tenant_id } = req.query;
+  const tId = tenant_id || 't1';
+  const fleet = await pool.query('SELECT COUNT(*) FROM vehicles WHERE tenant_id = $1', [tId]);
+  const active = await pool.query('SELECT COUNT(*) FROM vehicles WHERE tenant_id = $1 AND status = "Activo"', [tId]);
+  const arrears = await pool.query('SELECT SUM(ABS(balance)) FROM drivers WHERE tenant_id = $1 AND balance < 0', [tId]);
+  const revenue = await pool.query('SELECT SUM(amount) FROM payments WHERE tenant_id = $1 AND status = "verified"', [tId]);
+  
+  res.json({
+    totalAssetsValue: parseInt(fleet.rows[0].count) * 20000,
+    occupancyRate: (parseInt(active.rows[0].count) / parseInt(fleet.rows[0].count)) * 100 || 0,
+    totalArrears: parseFloat(arrears.rows[0].sum || 0),
+    totalRevenue: parseFloat(revenue.rows[0].sum || 0),
+    criticalActions: [{ title: 'Mantenimiento Pendiente', ref: 'ABC-123' }]
+  });
 });
 
-app.get('/api/stats/visits', async (req: any, res: any) => {
-  try {
-    const v = await redis.get('global_visits');
-    res.json({ visits: parseInt(v || '0') });
-  } catch { res.json({ visits: 0 }); }
+// --- DRIVERS & NOTIFICATIONS ---
+app.get('/api/driver/me', async (req, res) => {
+  const r = await pool.query('SELECT * FROM drivers WHERE id = $1', [req.query.id || 'd1']);
+  res.json(r.rows[0]);
 });
 
-app.get('*', (req: any, res: any) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
+app.get('/api/driver/payments', async (req, res) => {
+  const r = await pool.query('SELECT * FROM payments WHERE driver_id = $1 ORDER BY created_at DESC', [req.query.id || 'd1']);
+  res.json(r.rows);
+});
+
+app.get('/api/notifications', async (req, res) => {
+  const { role, user_id } = req.query;
+  const r = await pool.query('SELECT * FROM notifications WHERE (role_target = $1 OR user_id = $2) AND read = FALSE ORDER BY created_at DESC', [role, user_id]);
+  res.json(r.rows.map(n => ({ ...n, timestamp: new Date(n.created_at).toLocaleTimeString() })));
+});
+
+app.post('/api/notifications/read', async (req, res) => {
+  await pool.query('UPDATE notifications SET read = TRUE WHERE id = $1', [req.body.id]);
+  res.json({ success: true });
+});
+
+app.get('/api/stats/visits', async (req, res) => {
+  const v = await redis.get('global_visits');
+  res.json({ visits: parseInt(v || '0') });
+});
+
+// --- SUPER ADMIN ---
+app.get('/api/super/stats', async (req, res) => {
+  const mrr = await pool.query('SELECT SUM(p.monthly_price) FROM tenants t JOIN plans p ON t.plan_id = p.id');
+  const fleet = await pool.query('SELECT COUNT(*) FROM vehicles');
+  const tenants = await pool.query('SELECT COUNT(*) FROM tenants WHERE status = "active"');
+  res.json({ totalMrr: parseFloat(mrr.rows[0].sum || 0), totalFleet: parseInt(fleet.rows[0].count), activeTenants: parseInt(tenants.rows[0].count), suspendedTenants: 0 });
+});
+
+app.get('/api/super/tenants', async (req, res) => {
+  const r = await pool.query('SELECT t.*, p.name as plan FROM tenants t JOIN plans p ON t.plan_id = p.id');
+  res.json(r.rows.map(t => ({ ...t, companyName: t.company_name, fleetSize: 0 })));
+});
+
+app.get('/api/super/plans', async (req, res) => {
+  const r = await pool.query('SELECT * FROM plans');
+  res.json(r.rows);
+});
+
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
 
 initDb().then(() => app.listen(port, () => console.log(`🚀 Aurum Cloud Active on Port ${port}`)));
