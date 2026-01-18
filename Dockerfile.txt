@@ -1,4 +1,3 @@
-
 # Aurum Leasing Cloud Native Dockerfile - Optimized for Port 80
 # Base image: Node.js 20 Alpine
 
@@ -35,25 +34,26 @@ ENV PORT=80
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 aurum_runtime_user
 
-# Copiar artefactos
+# Copiar artefactos de construcción
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/package*.json ./
-# CRÍTICO: Copiar las migraciones para que el runner de node-pg-migrate funcione en prod
+# CRÍTICO: Copiar la carpeta de migraciones consolidada para el bootstrap de la DB
 COPY --from=builder /app/migrations ./migrations
 
-# Dependencias de solo producción
+# Instalación de dependencias de producción solamente
 RUN npm install --only=production --legacy-peer-deps && \
     npm cache clean --force
 
 RUN chown -R aurum_runtime_user:nodejs /app
 USER aurum_runtime_user
 
-# Exponer puerto 80
+# Exponer el puerto de servicio
 EXPOSE 80
 
-# Healthcheck apuntando al puerto 80
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+# Healthcheck avanzado apuntando a la API de estado
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://localhost:80/api/stats/visits').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
+# Comando de arranque que dispara las migraciones y el servidor
 CMD ["node", "server.js"]

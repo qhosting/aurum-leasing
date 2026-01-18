@@ -1,0 +1,22 @@
+-- AURUM LEASING: MASTER INITIALIZATION PLAN --
+
+Este archivo consolida el esquema estructural y los datos maestros 
+necesarios para el arranque en frío del sistema Aurum Leasing V5.
+
+1. ESTRUCTURA (DDL):
+   - Tablas: plans, tenants, users, drivers, vehicles, payments, notifications.
+   - Soporte Multi-tenant nativo mediante tenant_id indexado.
+   - Restricciones de integridad referencial con borrado en cascada.
+
+2. DATOS MAESTROS (SEEDING):
+   - Catálogo de Planes: Basic ($199), Pro ($499), Enterprise ($1299).
+   - Arrendadora de Prueba: Aurum Leasing Demo (ID: t1).
+   - CREDENCIALES DE ACCESO:
+     - SUPER ADMIN: root@aurumcapital.mx / x0420EZS*
+     - STAFF (Arrendador): pro@aurum.mx / demo123
+     - CHOFER (Arrendatario): chofer@aurum.mx / demo123
+   - Flota Semilla: 
+     - v1: Toyota Avanza (Activo)
+     - v2: Nissan Versa (Disponible)
+
+-- SISTEMA LISTO PARA PRODUCCIÓN --
