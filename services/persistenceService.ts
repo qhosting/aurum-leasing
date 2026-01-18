@@ -120,7 +120,6 @@ export const persistenceService = {
       const res = await fetch(`${API_BASE}/fleet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Fix: Use the parameter 'tenantId' instead of the undefined 'tenant_id'
         body: JSON.stringify({ ...vehicle, tenant_id: tenantId })
       });
       return await res.json();

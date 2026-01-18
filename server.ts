@@ -12,7 +12,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.PORT || 3000;
+// Ajustamos al puerto 80 por defecto como indican los logs del usuario
+const port = process.env.PORT || 80;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgres://postgres:57c52e388e393eb0b74f@qhosting_aurum-leasing-db:5432/aurum-leasing-db?sslmode=disable',
@@ -43,6 +44,7 @@ const initDb = async () => {
   try {
     console.log('📦 Aurum System: Sincronizando Esquema Maestro...');
     
+    // Crear tablas básicas
     await client.query(`
       CREATE TABLE IF NOT EXISTS plans (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY);
@@ -55,24 +57,23 @@ const initDb = async () => {
       CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY);
     `);
 
-    // Función de migración mejorada con soporte para nulidad
     const ensureColumn = async (table: string, column: string, type: string, defaultValue: string, isNullable: boolean = false) => {
-      const res = await client.query(`
+      const colCheck = await client.query(`
         SELECT column_name FROM information_schema.columns 
         WHERE table_name = '${table}' AND column_name = '${column}'
       `);
       
-      if (res.rows.length === 0) {
+      if (colCheck.rows.length === 0) {
         await client.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${type} DEFAULT ${defaultValue}`);
       }
       
-      // Siempre nos aseguramos de que la restricción NOT NULL sea la correcta
+      // Forzar la nulidad si es requerida (como en tenant_id para superadmin)
       if (isNullable) {
         await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} DROP NOT NULL`).catch(() => {});
       } else {
-        // Solo intentamos SET NOT NULL si no es nulable y ya hemos limpiado los nulos
+        // Limpiar nulos antes de aplicar NOT NULL
         await client.query(`UPDATE ${table} SET ${column} = ${defaultValue} WHERE ${column} IS NULL`);
-        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`).catch(e => console.warn(e.message));
+        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`).catch(() => {});
       }
 
       if (defaultValue !== 'NULL') {
@@ -80,7 +81,7 @@ const initDb = async () => {
       }
     };
 
-    // Migraciones de esquema
+    // Sincronización agresiva de columnas
     await ensureColumn('plans', 'name', 'TEXT', "'Basic'");
     await ensureColumn('plans', 'monthly_price', 'DECIMAL(10,2)', '0');
     await ensureColumn('plans', 'features', 'JSONB', "'[]'");
@@ -91,11 +92,11 @@ const initDb = async () => {
     await ensureColumn('tenants', 'status', 'TEXT', "'active'");
     await ensureColumn('tenants', 'data', 'JSONB', "'{}'");
 
-    // IMPORTANTE: tenant_id en users debe ser NULABLE para permitir Super Admins globales
+    // CRÍTICO: tenant_id debe ser nulable para el Super Admin
     await ensureColumn('users', 'email', 'TEXT', "''");
     await ensureColumn('users', 'password', 'TEXT', "'123'");
     await ensureColumn('users', 'role', 'TEXT', "'Arrendatario'");
-    await ensureColumn('users', 'tenant_id', 'TEXT', "NULL", true); // true = IS NULLABLE
+    await ensureColumn('users', 'tenant_id', 'TEXT', "NULL", true); 
     await ensureColumn('users', 'data', 'JSONB', "'{}'");
 
     await ensureColumn('drivers', 'tenant_id', 'TEXT', "NULL", true);
@@ -129,7 +130,7 @@ const initDb = async () => {
 
     await client.query("BEGIN");
     
-    // UPSERT de Planes
+    // UPSERT de Datos Maestros
     await client.query(`
       INSERT INTO plans (id, name, monthly_price, color, features) 
       VALUES ('p1', 'Basic', 199, 'slate', '["Gestión Flota"]'), 
@@ -138,14 +139,12 @@ const initDb = async () => {
       ON CONFLICT (id) DO UPDATE SET monthly_price = EXCLUDED.monthly_price;
     `);
 
-    // UPSERT de Tenants
     await client.query(`
       INSERT INTO tenants (id, company_name, plan_id, data) 
       VALUES ('t1', 'Aurum Leasing Demo', 'p3', '{}') 
       ON CONFLICT (id) DO UPDATE SET company_name = EXCLUDED.company_name, data = EXCLUDED.data;
     `);
 
-    // UPSERT de Usuarios (El Super Admin u1 tiene tenant_id NULL)
     await client.query(`
       INSERT INTO users (id, email, password, role, tenant_id, data) 
       VALUES ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL, '{}'), 
@@ -178,7 +177,7 @@ const initDb = async () => {
   }
 };
 
-// --- ENDPOINTS ---
+// Endpoints
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]);
