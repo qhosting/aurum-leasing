@@ -43,7 +43,6 @@ const initDb = async () => {
   try {
     console.log('📦 Aurum System: Sincronizando Esquema Maestro...');
     
-    // 1. Asegurar Tablas Base
     await client.query(`
       CREATE TABLE IF NOT EXISTS plans (id TEXT PRIMARY KEY);
       CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY);
@@ -56,7 +55,6 @@ const initDb = async () => {
       CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY);
     `);
 
-    // 2. Función de Migración Dinámica Mejorada
     const ensureColumn = async (table: string, column: string, type: string, defaultValue: string) => {
       const res = await client.query(`
         SELECT column_name FROM information_schema.columns 
@@ -64,23 +62,21 @@ const initDb = async () => {
       `);
       
       if (res.rows.length === 0) {
-        // Si no existe, crear con default para registros futuros
         await client.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${type} DEFAULT ${defaultValue}`);
+      } else {
+        // Si ya existe, nos aseguramos de que no bloquee por nulos mientras limpiamos
+        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} DROP NOT NULL`).catch(() => {});
       }
       
-      // Limpiar registros existentes que tengan NULL en esta columna (Crucial para el error reportado)
+      // Forzar valor por defecto en registros antiguos con nulos
       await client.query(`UPDATE ${table} SET ${column} = ${defaultValue} WHERE ${column} IS NULL`);
       
-      // Aplicar restricciones finales
-      try {
-        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`);
-        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET DEFAULT ${defaultValue}`);
-      } catch (e) {
-        console.warn(`⚠️ Warning en ${table}.${column}:`, (e as Error).message);
-      }
+      // Aplicar restricciones finales estrictas
+      await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`);
+      await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET DEFAULT ${defaultValue}`);
     };
 
-    // --- Módulo SaaS & Tenants ---
+    // Migraciones de columnas con el nuevo flujo ultra-seguro
     await ensureColumn('plans', 'name', 'TEXT', "'Basic'");
     await ensureColumn('plans', 'monthly_price', 'DECIMAL(10,2)', '0');
     await ensureColumn('plans', 'features', 'JSONB', "'[]'");
@@ -89,9 +85,8 @@ const initDb = async () => {
     await ensureColumn('tenants', 'company_name', 'TEXT', "'Empresa Nueva'");
     await ensureColumn('tenants', 'plan_id', 'TEXT', "'p1'");
     await ensureColumn('tenants', 'status', 'TEXT', "'active'");
-    await ensureColumn('tenants', 'data', 'JSONB', "'{}'"); // FIX: Gestión de columna 'data' en tenants
+    await ensureColumn('tenants', 'data', 'JSONB', "'{}'");
 
-    // --- Módulo Usuarios ---
     await ensureColumn('users', 'email', 'TEXT', "''");
     await ensureColumn('users', 'password', 'TEXT', "'123'");
     await ensureColumn('users', 'role', 'TEXT', "'Arrendatario'");
@@ -103,7 +98,6 @@ const initDb = async () => {
     await ensureColumn('drivers', 'balance', 'DECIMAL(12,2)', '0');
     await ensureColumn('drivers', 'data', 'JSONB', "'{}'");
 
-    // --- Módulo Flota ---
     await ensureColumn('vehicles', 'plate', 'TEXT', "''");
     await ensureColumn('vehicles', 'brand', 'TEXT', "''");
     await ensureColumn('vehicles', 'model', 'TEXT', "''");
@@ -112,7 +106,6 @@ const initDb = async () => {
     await ensureColumn('vehicles', 'driver_id', 'TEXT', "NULL");
     await ensureColumn('vehicles', 'data', 'JSONB', "'{}'");
 
-    // --- Módulo Financiero ---
     await ensureColumn('payments', 'tenant_id', 'TEXT', "NULL");
     await ensureColumn('payments', 'driver_id', 'TEXT', "NULL");
     await ensureColumn('payments', 'amount', 'DECIMAL(12,2)', '0');
@@ -121,7 +114,6 @@ const initDb = async () => {
     await ensureColumn('payments', 'data', 'JSONB', "'{}'");
     await ensureColumn('payments', 'created_at', 'TIMESTAMP', 'CURRENT_TIMESTAMP');
 
-    // --- Módulo Notificaciones ---
     await ensureColumn('notifications', 'user_id', 'TEXT', "NULL");
     await ensureColumn('notifications', 'role_target', 'TEXT', "NULL");
     await ensureColumn('notifications', 'title', 'TEXT', "''");
@@ -130,7 +122,6 @@ const initDb = async () => {
     await ensureColumn('notifications', 'read', 'BOOLEAN', 'FALSE');
     await ensureColumn('notifications', 'created_at', 'TIMESTAMP', 'CURRENT_TIMESTAMP');
 
-    // 3. Semilla de Datos (UPSERTs Actualizados)
     await client.query("BEGIN");
     
     await client.query(`
@@ -141,11 +132,10 @@ const initDb = async () => {
       ON CONFLICT (id) DO UPDATE SET monthly_price = EXCLUDED.monthly_price;
     `);
 
-    // FIX: Incluir 'data' en el insert de tenants para satisfacer la restricción NOT NULL
     await client.query(`
       INSERT INTO tenants (id, company_name, plan_id, data) 
       VALUES ('t1', 'Aurum Leasing Demo', 'p3', '{}') 
-      ON CONFLICT (id) DO UPDATE SET company_name = EXCLUDED.company_name;
+      ON CONFLICT (id) DO UPDATE SET company_name = EXCLUDED.company_name, data = EXCLUDED.data;
     `);
 
     await client.query(`
@@ -153,13 +143,13 @@ const initDb = async () => {
       VALUES ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL, '{}'), 
              ('u2', 'pro@aurum.mx', 'pro123', 'Arrendador', 't1', '{}'), 
              ('u3', 'chofer@aurum.mx', 'chofer123', 'Arrendatario', 't1', '{}') 
-      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, data = EXCLUDED.data;
     `);
 
     await client.query(`
       INSERT INTO drivers (id, email, tenant_id, balance, data) 
       VALUES ('d1', 'chofer@aurum.mx', 't1', 0, '{"name": "Juan Pérez", "amortization": {"paidPrincipal": 5000, "totalValue": 25000}}') 
-      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, data = EXCLUDED.data;
     `);
 
     await client.query(`
@@ -170,7 +160,7 @@ const initDb = async () => {
     `);
 
     await client.query("COMMIT");
-    console.log('✅ Aurum System: DB Sincronizada y Hotfix Aplicado.');
+    console.log('✅ Aurum System: DB Sincronizada con éxito.');
 
   } catch (err: any) {
     await client.query("ROLLBACK").catch(() => {});
@@ -180,7 +170,7 @@ const initDb = async () => {
   }
 };
 
-// --- ENDPOINTS ---
+// Endpoints (Mantenidos igual para consistencia operativa)
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]);
@@ -201,7 +191,7 @@ app.get('/api/fleet', async (req, res) => {
 app.post('/api/fleet', async (req, res) => {
   const { plate, brand, model, tenant_id } = req.body;
   const id = `v-${Date.now()}`;
-  await pool.query('INSERT INTO vehicles (id, plate, brand, model, tenant_id) VALUES ($1, $2, $3, $4, $5)', [id, plate, brand, model, tenant_id]);
+  await pool.query('INSERT INTO vehicles (id, plate, brand, model, tenant_id, data) VALUES ($1, $2, $3, $4, $5, $6)', [id, plate, brand, model, tenant_id, '{}']);
   res.json({ success: true, id });
 });
 
