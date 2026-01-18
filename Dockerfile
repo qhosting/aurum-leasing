@@ -1,0 +1,57 @@
+
+# Aurum Leasing Cloud Native Dockerfile - Optimized for Port 80
+# Base image: Node.js 20 Alpine
+
+# --- STAGE 1: INSTALL DEPENDENCIES ---
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+# --- STAGE 2: BUILD APP ---
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Ejecutar el build unificado
+RUN npm run build
+
+# --- STAGE 3: RUNNER ---
+FROM node:20-alpine AS runner
+LABEL org.opencontainers.image.vendor="Aurum Software"
+LABEL org.opencontainers.image.title="Aurum Leasing System"
+
+WORKDIR /app
+
+# Sincronización con el puerto de producción reportado en logs
+ENV NODE_ENV=production
+ENV PORT=80
+
+# Seguridad: No-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 aurum_runtime_user
+
+# Copiar artefactos
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/package*.json ./
+
+# Dependencias de solo producción
+RUN npm install --only=production --legacy-peer-deps && \
+    npm cache clean --force
+
+RUN chown -R aurum_runtime_user:nodejs /app
+USER aurum_runtime_user
+
+# Exponer puerto 80
+EXPOSE 80
+
+# Healthcheck apuntando al puerto 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://localhost:80/api/stats/visits').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+
+CMD ["node", "server.js"]
