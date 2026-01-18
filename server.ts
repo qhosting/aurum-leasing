@@ -55,7 +55,8 @@ const initDb = async () => {
       CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY);
     `);
 
-    const ensureColumn = async (table: string, column: string, type: string, defaultValue: string) => {
+    // Función de migración mejorada con soporte para nulidad
+    const ensureColumn = async (table: string, column: string, type: string, defaultValue: string, isNullable: boolean = false) => {
       const res = await client.query(`
         SELECT column_name FROM information_schema.columns 
         WHERE table_name = '${table}' AND column_name = '${column}'
@@ -63,20 +64,23 @@ const initDb = async () => {
       
       if (res.rows.length === 0) {
         await client.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${type} DEFAULT ${defaultValue}`);
-      } else {
-        // Si ya existe, nos aseguramos de que no bloquee por nulos mientras limpiamos
-        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} DROP NOT NULL`).catch(() => {});
       }
       
-      // Forzar valor por defecto en registros antiguos con nulos
-      await client.query(`UPDATE ${table} SET ${column} = ${defaultValue} WHERE ${column} IS NULL`);
-      
-      // Aplicar restricciones finales estrictas
-      await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`);
-      await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET DEFAULT ${defaultValue}`);
+      // Siempre nos aseguramos de que la restricción NOT NULL sea la correcta
+      if (isNullable) {
+        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} DROP NOT NULL`).catch(() => {});
+      } else {
+        // Solo intentamos SET NOT NULL si no es nulable y ya hemos limpiado los nulos
+        await client.query(`UPDATE ${table} SET ${column} = ${defaultValue} WHERE ${column} IS NULL`);
+        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`).catch(e => console.warn(e.message));
+      }
+
+      if (defaultValue !== 'NULL') {
+        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET DEFAULT ${defaultValue}`);
+      }
     };
 
-    // Migraciones de columnas con el nuevo flujo ultra-seguro
+    // Migraciones de esquema
     await ensureColumn('plans', 'name', 'TEXT', "'Basic'");
     await ensureColumn('plans', 'monthly_price', 'DECIMAL(10,2)', '0');
     await ensureColumn('plans', 'features', 'JSONB', "'[]'");
@@ -87,13 +91,14 @@ const initDb = async () => {
     await ensureColumn('tenants', 'status', 'TEXT', "'active'");
     await ensureColumn('tenants', 'data', 'JSONB', "'{}'");
 
+    // IMPORTANTE: tenant_id en users debe ser NULABLE para permitir Super Admins globales
     await ensureColumn('users', 'email', 'TEXT', "''");
     await ensureColumn('users', 'password', 'TEXT', "'123'");
     await ensureColumn('users', 'role', 'TEXT', "'Arrendatario'");
-    await ensureColumn('users', 'tenant_id', 'TEXT', "NULL");
+    await ensureColumn('users', 'tenant_id', 'TEXT', "NULL", true); // true = IS NULLABLE
     await ensureColumn('users', 'data', 'JSONB', "'{}'");
 
-    await ensureColumn('drivers', 'tenant_id', 'TEXT', "NULL");
+    await ensureColumn('drivers', 'tenant_id', 'TEXT', "NULL", true);
     await ensureColumn('drivers', 'email', 'TEXT', "''");
     await ensureColumn('drivers', 'balance', 'DECIMAL(12,2)', '0');
     await ensureColumn('drivers', 'data', 'JSONB', "'{}'");
@@ -102,20 +107,20 @@ const initDb = async () => {
     await ensureColumn('vehicles', 'brand', 'TEXT', "''");
     await ensureColumn('vehicles', 'model', 'TEXT', "''");
     await ensureColumn('vehicles', 'status', 'TEXT', "'Disponible'");
-    await ensureColumn('vehicles', 'tenant_id', 'TEXT', "NULL");
-    await ensureColumn('vehicles', 'driver_id', 'TEXT', "NULL");
+    await ensureColumn('vehicles', 'tenant_id', 'TEXT', "NULL", true);
+    await ensureColumn('vehicles', 'driver_id', 'TEXT', "NULL", true);
     await ensureColumn('vehicles', 'data', 'JSONB', "'{}'");
 
-    await ensureColumn('payments', 'tenant_id', 'TEXT', "NULL");
-    await ensureColumn('payments', 'driver_id', 'TEXT', "NULL");
+    await ensureColumn('payments', 'tenant_id', 'TEXT', "NULL", true);
+    await ensureColumn('payments', 'driver_id', 'TEXT', "NULL", true);
     await ensureColumn('payments', 'amount', 'DECIMAL(12,2)', '0');
     await ensureColumn('payments', 'status', 'TEXT', "'pending'");
     await ensureColumn('payments', 'type', 'TEXT', "'renta'");
     await ensureColumn('payments', 'data', 'JSONB', "'{}'");
     await ensureColumn('payments', 'created_at', 'TIMESTAMP', 'CURRENT_TIMESTAMP');
 
-    await ensureColumn('notifications', 'user_id', 'TEXT', "NULL");
-    await ensureColumn('notifications', 'role_target', 'TEXT', "NULL");
+    await ensureColumn('notifications', 'user_id', 'TEXT', "NULL", true);
+    await ensureColumn('notifications', 'role_target', 'TEXT', "NULL", true);
     await ensureColumn('notifications', 'title', 'TEXT', "''");
     await ensureColumn('notifications', 'message', 'TEXT', "''");
     await ensureColumn('notifications', 'type', 'TEXT', "'system'");
@@ -124,6 +129,7 @@ const initDb = async () => {
 
     await client.query("BEGIN");
     
+    // UPSERT de Planes
     await client.query(`
       INSERT INTO plans (id, name, monthly_price, color, features) 
       VALUES ('p1', 'Basic', 199, 'slate', '["Gestión Flota"]'), 
@@ -132,18 +138,20 @@ const initDb = async () => {
       ON CONFLICT (id) DO UPDATE SET monthly_price = EXCLUDED.monthly_price;
     `);
 
+    // UPSERT de Tenants
     await client.query(`
       INSERT INTO tenants (id, company_name, plan_id, data) 
       VALUES ('t1', 'Aurum Leasing Demo', 'p3', '{}') 
       ON CONFLICT (id) DO UPDATE SET company_name = EXCLUDED.company_name, data = EXCLUDED.data;
     `);
 
+    // UPSERT de Usuarios (El Super Admin u1 tiene tenant_id NULL)
     await client.query(`
       INSERT INTO users (id, email, password, role, tenant_id, data) 
       VALUES ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL, '{}'), 
              ('u2', 'pro@aurum.mx', 'pro123', 'Arrendador', 't1', '{}'), 
              ('u3', 'chofer@aurum.mx', 'chofer123', 'Arrendatario', 't1', '{}') 
-      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, data = EXCLUDED.data;
+      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, tenant_id = EXCLUDED.tenant_id, data = EXCLUDED.data;
     `);
 
     await client.query(`
@@ -170,7 +178,7 @@ const initDb = async () => {
   }
 };
 
-// Endpoints (Mantenidos igual para consistencia operativa)
+// --- ENDPOINTS ---
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]);
