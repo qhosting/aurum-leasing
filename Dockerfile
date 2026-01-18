@@ -1,0 +1,61 @@
+
+# Aurum Leasing Cloud Native Dockerfile
+# Base image: Node.js 20 Alpine para mínima huella y máxima seguridad
+
+# --- STAGE 1: INSTALL DEPENDENCIES ---
+FROM node:20-alpine AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Copiar solo archivos de definición de paquetes para optimizar caché de capas
+COPY package*.json ./
+RUN npm install --legacy-peer-deps
+
+# --- STAGE 2: BUILD APP ---
+FROM node:20-alpine AS builder
+WORKDIR /app
+
+# Heredar dependencias del stage anterior
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Ejecutar el build unificado (Client & Server)
+RUN npm run build
+
+# --- STAGE 3: RUNNER ---
+FROM node:20-alpine AS runner
+LABEL org.opencontainers.image.vendor="Aurum Software"
+LABEL org.opencontainers.image.title="Aurum Leasing System"
+
+WORKDIR /app
+
+# Variables de entorno críticas
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Crear usuario no-root por seguridad (Hardening)
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 aurum_runtime_user
+
+# Copiar artefactos finales
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/package*.json ./
+
+# Instalar solo dependencias runtime
+RUN npm install --only=production --legacy-peer-deps && \
+    npm cache clean --force
+
+# Ajustar permisos para el runtime user
+RUN chown -R aurum_runtime_user:nodejs /app
+USER aurum_runtime_user
+
+# Exponer puerto de aplicación
+EXPOSE 3000
+
+# Healthcheck: Valida salud interna de la API
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://localhost:3000/api/stats/visits').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+
+# Entrada principal: Node.js ejecutando el servidor compilado
+CMD ["node", "server.js"]
