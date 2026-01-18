@@ -7,7 +7,8 @@
     "start": "node server.js",
     "build:server": "tsc",
     "build:client": "esbuild index.tsx --bundle --outfile=dist/index.js --format=esm --minify --external:react --external:react-dom",
-    "build": "mkdir -p dist && npm run build:client && npm run build:server && cp index.html manifest.json sw.js dist/ && sed -i 's/index.tsx/index.js/g' dist/index.html"
+    "build": "mkdir -p dist && npm run build:client && npm run build:server && cp index.html manifest.json sw.js dist/ && sed -i 's/index.tsx/index.js/g' dist/index.html",
+    "migrate": "node-pg-migrate"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -20,7 +21,8 @@
     "recharts": "^2.15.0",
     "@google/genai": "^1.34.0",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "node-pg-migrate": "^7.3.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3",

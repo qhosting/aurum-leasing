@@ -1,0 +1,14 @@
+
+-- MIGRACIÓN 001: ESQUEMA INICIAL AURUM LEASING --
+Tablas creadas:
+1. plans: Catálogo de suscripciones SaaS.
+2. tenants: Entidades arrendadoras (Multi-tenancy).
+3. users: Personal staff y Super Admin (tenant_id opcional para superadmin).
+4. drivers: Arrendatarios vinculados a un tenant.
+5. vehicles: Unidades de la flota.
+6. payments: Registro financiero de ingresos.
+7. notifications: Centro de avisos del sistema.
+
+Reglas de Integridad:
+- tenant_id en la tabla 'users' permite NULL para el rol 'Super Admin'.
+- Eliminación en cascada para registros vinculados a un tenant eliminado.

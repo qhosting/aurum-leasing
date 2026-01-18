@@ -1,4 +1,3 @@
-
 import express, { Request, Response } from 'express';
 import { Pool } from 'pg';
 import Redis from 'ioredis';
@@ -7,16 +6,18 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { fileURLToPath } from 'url';
+import migrate from 'node-pg-migrate';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-// Ajustamos al puerto 80 por defecto como indican los logs del usuario
 const port = process.env.PORT || 80;
 
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres:57c52e388e393eb0b74f@qhosting_aurum-leasing-db:5432/aurum-leasing-db?sslmode=disable';
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres:57c52e388e393eb0b74f@qhosting_aurum-leasing-db:5432/aurum-leasing-db?sslmode=disable',
+  connectionString: DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
@@ -28,7 +29,7 @@ app.use(helmet({
     directives: {
       "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com", "https://esm.sh"],
       "connect-src": ["'self'", "https://esm.sh", "https://*.google.com"],
-      "img-src": ["'self'", "data:", "https://*", "blob:"],
+      "img-src": ["'self'", "data:", "https://*", "blobBase64:"],
       "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"]
     }
   }
@@ -39,141 +40,23 @@ app.use(cors() as any);
 app.use(express.json() as any);
 app.use(express.static(path.join(__dirname, 'dist')) as any);
 
-const initDb = async () => {
-  const client = await pool.connect();
+const runMigrations = async () => {
+  console.log('📦 Aurum System: Sincronizando Esquema Maestro via node-pg-migrate...');
   try {
-    console.log('📦 Aurum System: Sincronizando Esquema Maestro...');
-    
-    // Crear tablas básicas
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS plans (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS drivers (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS vehicles (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS contracts (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS maintenance_records (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY);
-    `);
-
-    const ensureColumn = async (table: string, column: string, type: string, defaultValue: string, isNullable: boolean = false) => {
-      const colCheck = await client.query(`
-        SELECT column_name FROM information_schema.columns 
-        WHERE table_name = '${table}' AND column_name = '${column}'
-      `);
-      
-      if (colCheck.rows.length === 0) {
-        await client.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${type} DEFAULT ${defaultValue}`);
-      }
-      
-      // Forzar la nulidad si es requerida (como en tenant_id para superadmin)
-      if (isNullable) {
-        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} DROP NOT NULL`).catch(() => {});
-      } else {
-        // Limpiar nulos antes de aplicar NOT NULL
-        await client.query(`UPDATE ${table} SET ${column} = ${defaultValue} WHERE ${column} IS NULL`);
-        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL`).catch(() => {});
-      }
-
-      if (defaultValue !== 'NULL') {
-        await client.query(`ALTER TABLE ${table} ALTER COLUMN ${column} SET DEFAULT ${defaultValue}`);
-      }
-    };
-
-    // Sincronización agresiva de columnas
-    await ensureColumn('plans', 'name', 'TEXT', "'Basic'");
-    await ensureColumn('plans', 'monthly_price', 'DECIMAL(10,2)', '0');
-    await ensureColumn('plans', 'features', 'JSONB', "'[]'");
-    await ensureColumn('plans', 'color', 'TEXT', "'slate'");
-
-    await ensureColumn('tenants', 'company_name', 'TEXT', "'Empresa Nueva'");
-    await ensureColumn('tenants', 'plan_id', 'TEXT', "'p1'");
-    await ensureColumn('tenants', 'status', 'TEXT', "'active'");
-    await ensureColumn('tenants', 'data', 'JSONB', "'{}'");
-
-    // CRÍTICO: tenant_id debe ser nulable para el Super Admin
-    await ensureColumn('users', 'email', 'TEXT', "''");
-    await ensureColumn('users', 'password', 'TEXT', "'123'");
-    await ensureColumn('users', 'role', 'TEXT', "'Arrendatario'");
-    await ensureColumn('users', 'tenant_id', 'TEXT', "NULL", true); 
-    await ensureColumn('users', 'data', 'JSONB', "'{}'");
-
-    await ensureColumn('drivers', 'tenant_id', 'TEXT', "NULL", true);
-    await ensureColumn('drivers', 'email', 'TEXT', "''");
-    await ensureColumn('drivers', 'balance', 'DECIMAL(12,2)', '0');
-    await ensureColumn('drivers', 'data', 'JSONB', "'{}'");
-
-    await ensureColumn('vehicles', 'plate', 'TEXT', "''");
-    await ensureColumn('vehicles', 'brand', 'TEXT', "''");
-    await ensureColumn('vehicles', 'model', 'TEXT', "''");
-    await ensureColumn('vehicles', 'status', 'TEXT', "'Disponible'");
-    await ensureColumn('vehicles', 'tenant_id', 'TEXT', "NULL", true);
-    await ensureColumn('vehicles', 'driver_id', 'TEXT', "NULL", true);
-    await ensureColumn('vehicles', 'data', 'JSONB', "'{}'");
-
-    await ensureColumn('payments', 'tenant_id', 'TEXT', "NULL", true);
-    await ensureColumn('payments', 'driver_id', 'TEXT', "NULL", true);
-    await ensureColumn('payments', 'amount', 'DECIMAL(12,2)', '0');
-    await ensureColumn('payments', 'status', 'TEXT', "'pending'");
-    await ensureColumn('payments', 'type', 'TEXT', "'renta'");
-    await ensureColumn('payments', 'data', 'JSONB', "'{}'");
-    await ensureColumn('payments', 'created_at', 'TIMESTAMP', 'CURRENT_TIMESTAMP');
-
-    await ensureColumn('notifications', 'user_id', 'TEXT', "NULL", true);
-    await ensureColumn('notifications', 'role_target', 'TEXT', "NULL", true);
-    await ensureColumn('notifications', 'title', 'TEXT', "''");
-    await ensureColumn('notifications', 'message', 'TEXT', "''");
-    await ensureColumn('notifications', 'type', 'TEXT', "'system'");
-    await ensureColumn('notifications', 'read', 'BOOLEAN', 'FALSE');
-    await ensureColumn('notifications', 'created_at', 'TIMESTAMP', 'CURRENT_TIMESTAMP');
-
-    await client.query("BEGIN");
-    
-    // UPSERT de Datos Maestros
-    await client.query(`
-      INSERT INTO plans (id, name, monthly_price, color, features) 
-      VALUES ('p1', 'Basic', 199, 'slate', '["Gestión Flota"]'), 
-             ('p2', 'Pro', 499, 'amber', '["IA Gemini Lite"]'), 
-             ('p3', 'Enterprise', 1299, 'indigo', '["IA Pro Full"]') 
-      ON CONFLICT (id) DO UPDATE SET monthly_price = EXCLUDED.monthly_price;
-    `);
-
-    await client.query(`
-      INSERT INTO tenants (id, company_name, plan_id, data) 
-      VALUES ('t1', 'Aurum Leasing Demo', 'p3', '{}') 
-      ON CONFLICT (id) DO UPDATE SET company_name = EXCLUDED.company_name, data = EXCLUDED.data;
-    `);
-
-    await client.query(`
-      INSERT INTO users (id, email, password, role, tenant_id, data) 
-      VALUES ('u1', 'admin@aurum.mx', 'admin123', 'Super Admin', NULL, '{}'), 
-             ('u2', 'pro@aurum.mx', 'pro123', 'Arrendador', 't1', '{}'), 
-             ('u3', 'chofer@aurum.mx', 'chofer123', 'Arrendatario', 't1', '{}') 
-      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, tenant_id = EXCLUDED.tenant_id, data = EXCLUDED.data;
-    `);
-
-    await client.query(`
-      INSERT INTO drivers (id, email, tenant_id, balance, data) 
-      VALUES ('d1', 'chofer@aurum.mx', 't1', 0, '{"name": "Juan Pérez", "amortization": {"paidPrincipal": 5000, "totalValue": 25000}}') 
-      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, data = EXCLUDED.data;
-    `);
-
-    await client.query(`
-      INSERT INTO vehicles (id, plate, brand, model, status, tenant_id, driver_id, data) 
-      VALUES ('v1', 'ABC-123', 'Toyota', 'Avanza', 'Activo', 't1', 'd1', '{}'), 
-             ('v2', 'XYZ-987', 'Nissan', 'Versa', 'Disponible', 't1', NULL, '{}') 
-      ON CONFLICT (id) DO NOTHING;
-    `);
-
-    await client.query("COMMIT");
+    // node-pg-migrate requires a direction and the directory containing migration files
+    await (migrate as any).default({
+      databaseUrl: DATABASE_URL,
+      dir: path.join(__dirname, 'migrations'),
+      direction: 'up',
+      migrationsTable: 'pgmigrations',
+      verbose: true
+    });
     console.log('✅ Aurum System: DB Sincronizada con éxito.');
-
   } catch (err: any) {
-    await client.query("ROLLBACK").catch(() => {});
-    console.error('❌ Aurum System DB Error:', err.message);
-  } finally {
-    client.release();
+    console.error('❌ Aurum System Migration Error:', err.message);
+    // In production, you might want to exit if migrations fail
+    // Fix: cast process to any to access exit method in environments where Process type is restricted
+    if (process.env.NODE_ENV === 'production') (process as any).exit(1);
   }
 };
 
@@ -296,4 +179,4 @@ app.get('/api/super/plans', async (req, res) => {
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
 
-initDb().then(() => app.listen(port, () => console.log(`🚀 Aurum Cloud Active on Port ${port}`)));
+runMigrations().then(() => app.listen(port, () => console.log(`🚀 Aurum Cloud Active on Port ${port}`)));

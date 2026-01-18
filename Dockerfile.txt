@@ -39,6 +39,8 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/package*.json ./
+# CRÍTICO: Copiar las migraciones para que el runner de node-pg-migrate funcione en prod
+COPY --from=builder /app/migrations ./migrations
 
 # Dependencias de solo producción
 RUN npm install --only=production --legacy-peer-deps && \

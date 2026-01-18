@@ -1,0 +1,9 @@
+
+-- SEED DATA 002: DATOS MAESTROS AURUM --
+Registros insertados:
+- Planes: Basic (p1), Pro (p2), Enterprise (p3).
+- Arrendadora Demo: Aurum Leasing Demo (t1) en Plan Enterprise.
+- Super Admin: root@aurumcapital.mx / x0420EZS*
+- Staff Demo: pro@aurum.mx (Arrendador t1).
+- Chofer Demo: chofer@aurum.mx (Arrendatario t1).
+- Flota Inicial: v1 (Toyota Avanza), v2 (Nissan Versa).
