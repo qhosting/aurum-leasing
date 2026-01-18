@@ -4,19 +4,24 @@ Este archivo consolida el esquema estructural y los datos maestros
 necesarios para el arranque en frío del sistema Aurum Leasing V5.
 
 1. ESTRUCTURA (DDL):
-   - Tablas: plans, tenants, users, drivers, vehicles, payments, notifications.
-   - Soporte Multi-tenant nativo mediante tenant_id indexado.
-   - Restricciones de integridad referencial con borrado en cascada.
+   - Tablas Creadas: 
+     * plans: Catálogo de suscripciones (Basic, Pro, Enterprise).
+     * tenants: Entidades multi-inquilino.
+     * users: Acceso Super Admin, Arrendador y Arrendatario.
+     * drivers: Perfil financiero del chofer y saldos.
+     * vehicles: Control de inventario de flota y telemetría básica.
+     * payments: Ledger de transacciones y conciliación.
+     * notifications: Despacho de alertas internas y staff.
 
-2. DATOS MAESTROS (SEEDING):
-   - Catálogo de Planes: Basic ($199), Pro ($499), Enterprise ($1299).
-   - Arrendadora de Prueba: Aurum Leasing Demo (ID: t1).
-   - CREDENCIALES DE ACCESO:
-     - SUPER ADMIN: root@aurumcapital.mx / x0420EZS*
-     - STAFF (Arrendador): pro@aurum.mx / demo123
-     - CHOFER (Arrendatario): chofer@aurum.mx / demo123
-   - Flota Semilla: 
-     - v1: Toyota Avanza (Activo)
-     - v2: Nissan Versa (Disponible)
+2. CONFIGURACIÓN DE INTEGRIDAD:
+   - Foreign Keys con ON DELETE CASCADE para limpieza de tenants.
+   - Tipos de datos JSONB para flexibilidad en telemetría y configuración.
+   - Soporte nativo para multi-sucursal via tenant_id.
 
--- SISTEMA LISTO PARA PRODUCCIÓN --
+3. DATOS SEMILLA (SEEDING):
+   - Super Admin: root@aurumcapital.mx / x0420EZS*
+   - Arrendador Demo: pro@aurum.mx / demo123 (Tenant: t1)
+   - Chofer Demo: chofer@aurum.mx / demo123 (Tenant: t1)
+   - Flota: Toyota Avanza (ABC-123) y Nissan Versa (XYZ-987).
+
+-- DOCUMENTACIÓN SINCRONIZADA CON MIGRACIÓN CJS --
