@@ -1,3 +1,4 @@
+
 import express, { Request, Response } from 'express';
 import { Pool } from 'pg';
 import Redis from 'ioredis';
@@ -43,8 +44,11 @@ app.use(express.static(path.join(__dirname, 'dist')) as any);
 const runMigrations = async () => {
   console.log('📦 Aurum System: Sincronizando Esquema Maestro via node-pg-migrate...');
   try {
-    // node-pg-migrate requires a direction and the directory containing migration files
-    await (migrate as any).default({
+    // node-pg-migrate default export varies based on environment/bundler. 
+    // We handle both directly calling it or accessing .default.
+    const migrationRunner = (migrate as any).default || migrate;
+    
+    await migrationRunner({
       databaseUrl: DATABASE_URL,
       dir: path.join(__dirname, 'migrations'),
       direction: 'up',
@@ -54,8 +58,7 @@ const runMigrations = async () => {
     console.log('✅ Aurum System: DB Sincronizada con éxito.');
   } catch (err: any) {
     console.error('❌ Aurum System Migration Error:', err.message);
-    // In production, you might want to exit if migrations fail
-    // Fix: cast process to any to access exit method in environments where Process type is restricted
+    // In production, failure to migrate is a critical error.
     if (process.env.NODE_ENV === 'production') (process as any).exit(1);
   }
 };
