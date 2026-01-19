@@ -1,27 +1,22 @@
--- AURUM LEASING: MASTER INITIALIZATION PLAN --
+-- AURUM LEASING: MASTER INITIALIZATION PLAN (MIRROR) --
 
-Este archivo consolida el esquema estructural y los datos maestros 
-necesarios para el arranque en frío del sistema Aurum Leasing V5.
+Este archivo refleja la estructura consolidada en 'migrations/001_init.cjs'.
 
-1. ESTRUCTURA (DDL):
-   - Tablas Creadas: 
-     * plans: Catálogo de suscripciones (Basic, Pro, Enterprise).
-     * tenants: Entidades multi-inquilino.
-     * users: Acceso Super Admin, Arrendador y Arrendatario.
-     * drivers: Perfil financiero del chofer y saldos.
-     * vehicles: Control de inventario de flota y telemetría básica.
-     * payments: Ledger de transacciones y conciliación.
-     * notifications: Despacho de alertas internas y staff.
+1. ESTRUCTURA DDL (JavaScript node-pg-migrate):
+   - plans: Catálogo de suscripciones.
+   - tenants: Entidades multi-arrendadora.
+   - users: Credenciales (SuperAdmin, Arrendador, Arrendatario).
+   - drivers: Balance financiero y datos de contrato del chofer.
+   - vehicles: Inventario de flota.
+   - payments: Ledger de transacciones.
+   - notifications: Despacho de alertas.
 
-2. CONFIGURACIÓN DE INTEGRIDAD:
-   - Foreign Keys con ON DELETE CASCADE para limpieza de tenants.
-   - Tipos de datos JSONB para flexibilidad en telemetría y configuración.
-   - Soporte nativo para multi-sucursal via tenant_id.
+2. SEED DATA CARGADO:
+   - Super Admin: root@aurumcapital.mx
+   - Staff Demo: pro@aurum.mx (Tenant t1)
+   - Chofer Demo: chofer@aurum.mx (Tenant t1)
+   - Flota: Toyota Avanza (v1), Nissan Versa (v2).
 
-3. DATOS SEMILLA (SEEDING):
-   - Super Admin: root@aurumcapital.mx / x0420EZS*
-   - Arrendador Demo: pro@aurum.mx / demo123 (Tenant: t1)
-   - Chofer Demo: chofer@aurum.mx / demo123 (Tenant: t1)
-   - Flota: Toyota Avanza (ABC-123) y Nissan Versa (XYZ-987).
-
--- DOCUMENTACIÓN SINCRONIZADA CON MIGRACIÓN CJS --
+3. NOTA TÉCNICA:
+   La migración se ejecuta automáticamente al iniciar el servidor 
+   mediante el runner interno en 'server.ts'.
