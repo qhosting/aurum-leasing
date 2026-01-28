@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { fileURLToPath } from 'url';
 import migrate from 'node-pg-migrate';
+import { GoogleGenAI, SchemaType } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -174,6 +175,68 @@ app.get('/api/notifications', async (req, res) => {
 app.post('/api/notifications/read', async (req, res) => {
   await pool.query('UPDATE notifications SET read = TRUE WHERE id = $1', [req.body.id]);
   res.json({ success: true });
+});
+
+app.post('/api/ai/analyze', async (req, res) => {
+  const { vehicles, drivers } = req.body;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({
+      risks: [{ title: "Config Error", description: "API Key not configured on server." }],
+      recommendations: ["Contact system administrator."]
+    });
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = `
+    Analyze the following leasing fleet data for a CEO.
+    Identify the top 3 risks (Financial, Operational, or Maintenance).
+    Suggest 2 immediate actions to improve profitability.
+
+    Vehicles: ${JSON.stringify(vehicles)}
+    Drivers: ${JSON.stringify(drivers)}
+
+    Return the response in a structured format with "risks" (array of {title, description}) and "recommendations" (array of strings).
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: SchemaType.OBJECT,
+          properties: {
+            risks: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  title: { type: SchemaType.STRING, description: "Short title of the risk" },
+                  description: { type: SchemaType.STRING, description: "Detailed explanation of the risk" }
+                }
+              }
+            },
+            recommendations: {
+              type: SchemaType.ARRAY,
+              items: { type: SchemaType.STRING, description: "Specific actionable recommendation" }
+            }
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    res.json(JSON.parse(text || "{}"));
+  } catch (error) {
+    console.error("Gemini Server Error:", error);
+    res.json({
+      risks: [{ title: "AI Service Error", description: "Could not generate analysis." }],
+      recommendations: ["Retry later."]
+    });
+  }
 });
 
 app.get('/api/stats/visits', async (req, res) => {
