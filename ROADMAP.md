@@ -7,9 +7,9 @@
 - [x] **Rate Limiting**: Configurar `express-rate-limit` global y específico para login.
 
 ## 2. Autenticación y Sesiones
-- [ ] **JWT / Sesiones Seguras**: Reemplazar el login simple por un sistema robusto basado en JWT (HttpOnly cookies) o sesiones en Redis.
-- [ ] **Manejo de Roles**: Implementar middleware de autorización para proteger endpoints según rol (`Super Admin`, `Arrendador`, `Arrendatario`).
-- [ ] **Recuperación de Contraseña**: Flujo de "Olvidé mi contraseña" vía email.
+- [x] **JWT / Sesiones Seguras**: Reemplazar el login simple por un sistema robusto basado en JWT (HttpOnly cookies).
+- [x] **Manejo de Roles**: Implementar middleware de autorización para proteger endpoints según rol (`Super Admin`, `Arrendador`, `Arrendatario`).
+- [x] **Recuperación de Contraseña**: Flujo de "Olvidé mi contraseña" vía email (endpoints backend implementados).
 
 ## 3. Calidad de Código y Testing
 - [ ] **Tests Unitarios**: Configurar Vitest/Jest y escribir pruebas para utilidades y componentes críticos.

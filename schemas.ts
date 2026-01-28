@@ -39,3 +39,12 @@ export const aiAnalyzeSchema = z.object({
   vehicles: z.array(z.any()),
   drivers: z.array(z.any())
 });
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email()
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  newPassword: z.string().min(6)
+});

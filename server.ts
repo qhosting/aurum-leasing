@@ -13,9 +13,14 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import {
   loginSchema, fleetSchema, paymentReportSchema, paymentVerifySchema,
-  driverProfileSchema, notificationReadSchema, aiAnalyzeSchema
+  driverProfileSchema, notificationReadSchema, aiAnalyzeSchema,
+  forgotPasswordSchema, resetPasswordSchema
 } from './schemas.js';
 import bcrypt from 'bcrypt';
+import cookieParser from 'cookie-parser';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { authenticateToken, authorizeRoles } from './middleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,6 +52,7 @@ app.use(helmet({
 app.use(compression() as any);
 app.use(cors() as any);
 app.use(express.json() as any);
+app.use(cookieParser() as any);
 app.use(express.static(path.join(__dirname, 'dist')) as any);
 
 // Rate Limiting
@@ -99,8 +105,21 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
     const match = await bcrypt.compare(password, user.password);
     if (match) {
       await redis.incr('global_visits');
-      // Do not return the hashed password in the response
       const { password: _, ...userWithoutPassword } = user;
+
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id },
+        process.env.JWT_SECRET || 'aurum-secret-key-change-in-prod',
+        { expiresIn: '8h' }
+      );
+
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 8 * 60 * 60 * 1000 // 8 hours
+      });
+
       res.json({ success: true, user: userWithoutPassword });
       return;
     }
@@ -109,13 +128,56 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
   res.status(401).json({ success: false, error: 'Credenciales inválidas.' });
 });
 
-app.get('/api/fleet', async (req, res) => {
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ success: true });
+});
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const validation = forgotPasswordSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const { email } = validation.data;
+  const r = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+
+  if (r.rows.length > 0) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await redis.setex(`reset:${token}`, 900, email); // 15 mins
+
+    // In a real implementation:
+    // await sendEmail(email, "Restablecer contraseña", `Link: https://app.aurum-leasing.mx/reset?token=${token}`);
+    console.log(`[EMAIL MOCK] To: ${email} | Subject: Reset Password | Token: ${token}`);
+  }
+
+  // Always return success to prevent user enumeration
+  res.json({ success: true, message: 'Si el correo existe, recibirás instrucciones.' });
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  const validation = resetPasswordSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const { token, newPassword } = validation.data;
+  const email = await redis.get(`reset:${token}`);
+
+  if (!email) {
+    return res.status(400).json({ error: 'Token inválido o expirado.' });
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await pool.query('UPDATE users SET password = $1 WHERE email = $2', [hashedPassword, email]);
+  await redis.del(`reset:${token}`);
+
+  res.json({ success: true, message: 'Contraseña actualizada.' });
+});
+
+app.get('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
   const { tenant_id } = req.query;
   const r = await pool.query('SELECT * FROM vehicles WHERE tenant_id = $1', [tenant_id || 't1']);
   res.json(r.rows);
 });
 
-app.post('/api/fleet', async (req, res) => {
+app.post('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
   const validation = fleetSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error });
 
@@ -125,7 +187,7 @@ app.post('/api/fleet', async (req, res) => {
   res.json({ success: true, id });
 });
 
-app.post('/api/payments/report', async (req, res) => {
+app.post('/api/payments/report', authenticateToken, async (req, res) => {
   const validation = paymentReportSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error });
 
@@ -136,7 +198,7 @@ app.post('/api/payments/report', async (req, res) => {
   res.json({ success: true, id });
 });
 
-app.post('/api/payments/verify', async (req, res) => {
+app.post('/api/payments/verify', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
   const validation = paymentVerifySchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error });
 
@@ -154,7 +216,7 @@ app.post('/api/payments/verify', async (req, res) => {
   }
 });
 
-app.get('/api/arrendador/stats', async (req, res) => {
+app.get('/api/arrendador/stats', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
   const { tenant_id } = req.query;
   const tId = tenant_id || 't1';
   try {
@@ -175,23 +237,25 @@ app.get('/api/arrendador/stats', async (req, res) => {
   }
 });
 
-app.get('/api/driver/me', async (req, res) => {
-  const r = await pool.query('SELECT * FROM drivers WHERE id = $1', [req.query.id || 'd1']);
+app.get('/api/driver/me', authenticateToken, async (req, res) => {
+  const driverId = req.query.id || (req as any).user.id;
+  const r = await pool.query('SELECT * FROM drivers WHERE id = $1', [driverId]);
   res.json(r.rows[0]);
 });
 
-app.get('/api/driver/payments', async (req, res) => {
-  const r = await pool.query('SELECT * FROM payments WHERE driver_id = $1 ORDER BY created_at DESC', [req.query.id || 'd1']);
+app.get('/api/driver/payments', authenticateToken, async (req, res) => {
+  const driverId = req.query.id || (req as any).user.id;
+  const r = await pool.query('SELECT * FROM payments WHERE driver_id = $1 ORDER BY created_at DESC', [driverId]);
   res.json(r.rows);
 });
 
-app.get('/api/drivers', async (req, res) => {
+app.get('/api/drivers', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
   const { tenant_id } = req.query;
   const r = await pool.query('SELECT * FROM drivers WHERE tenant_id = $1', [tenant_id || 't1']);
   res.json(r.rows);
 });
 
-app.patch('/api/driver/profile', async (req, res) => {
+app.patch('/api/driver/profile', authenticateToken, async (req, res) => {
   const validation = driverProfileSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error });
 
@@ -200,7 +264,7 @@ app.patch('/api/driver/profile', async (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/driver/vehicle', async (req, res) => {
+app.get('/api/driver/vehicle', authenticateToken, async (req, res) => {
   const r = await pool.query('SELECT * FROM vehicles WHERE driver_id = $1', [req.query.id]);
   res.json(r.rows[0]);
 });
@@ -295,7 +359,7 @@ app.get('/api/stats/visits', async (req, res) => {
   res.json({ visits: parseInt(v || '0') });
 });
 
-app.get('/api/super/stats', async (req, res) => {
+app.get('/api/super/stats', authenticateToken, authorizeRoles('Super Admin'), async (req, res) => {
   const mrr = await pool.query('SELECT SUM(p.monthly_price) FROM tenants t JOIN plans p ON t.plan_id = p.id');
   const fleet = await pool.query('SELECT COUNT(*) FROM vehicles');
   const tenants = await pool.query('SELECT COUNT(*) FROM tenants WHERE status = \'active\'');
@@ -307,12 +371,12 @@ app.get('/api/super/stats', async (req, res) => {
   });
 });
 
-app.get('/api/super/tenants', async (req, res) => {
+app.get('/api/super/tenants', authenticateToken, authorizeRoles('Super Admin'), async (req, res) => {
   const r = await pool.query('SELECT t.*, p.name as plan FROM tenants t JOIN plans p ON t.plan_id = p.id');
   res.json(r.rows.map(t => ({ ...t, companyName: t.company_name, fleetSize: 0 })));
 });
 
-app.get('/api/super/plans', async (req, res) => {
+app.get('/api/super/plans', authenticateToken, authorizeRoles('Super Admin'), async (req, res) => {
   const r = await pool.query('SELECT * FROM plans');
   res.json(r.rows);
 });
