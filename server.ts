@@ -142,6 +142,29 @@ app.get('/api/driver/payments', async (req, res) => {
   res.json(r.rows);
 });
 
+app.get('/api/drivers', async (req, res) => {
+  const { tenant_id } = req.query;
+  const r = await pool.query('SELECT * FROM drivers WHERE tenant_id = $1', [tenant_id || 't1']);
+  res.json(r.rows);
+});
+
+app.patch('/api/driver/profile', async (req, res) => {
+  const { id, data } = req.body;
+  await pool.query('UPDATE drivers SET data = data || $2::jsonb WHERE id = $1', [id, JSON.stringify(data)]);
+  res.json({ success: true });
+});
+
+app.get('/api/driver/vehicle', async (req, res) => {
+  const r = await pool.query('SELECT * FROM vehicles WHERE driver_id = $1', [req.query.id]);
+  res.json(r.rows[0]);
+});
+
+app.post('/api/notifications/clear', async (req, res) => {
+  const { role, user_id } = req.query;
+  await pool.query('UPDATE notifications SET read = TRUE WHERE (role_target = $1 OR user_id = $2)', [role, user_id]);
+  res.json({ success: true });
+});
+
 app.get('/api/notifications', async (req, res) => {
   const { role, user_id } = req.query;
   const r = await pool.query('SELECT * FROM notifications WHERE (role_target = $1 OR user_id = $2) AND read = FALSE ORDER BY created_at DESC', [role, user_id]);

@@ -48,8 +48,8 @@ export const persistenceService = {
 
   async clearNotifications(role: string, userId: string): Promise<any> {
     try {
-      const res = await fetch(`${API_BASE}/notifications?role=${role}&user_id=${userId}`, {
-        method: 'DELETE'
+      const res = await fetch(`${API_BASE}/notifications/clear?role=${role}&user_id=${userId}`, {
+        method: 'POST'
       });
       return await res.json();
     } catch { return { success: false }; }
