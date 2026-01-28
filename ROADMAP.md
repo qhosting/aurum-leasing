@@ -12,9 +12,9 @@
 - [x] **Recuperación de Contraseña**: Flujo de "Olvidé mi contraseña" vía email (endpoints backend implementados).
 
 ## 3. Calidad de Código y Testing
-- [ ] **Tests Unitarios**: Configurar Vitest/Jest y escribir pruebas para utilidades y componentes críticos.
-- [ ] **Tests de Integración**: Pruebas de API para asegurar que los endpoints responden correctamente a la base de datos.
-- [ ] **Linter & Formatter**: Configurar ESLint y Prettier en el pipeline de CI.
+- [x] **Tests Unitarios**: Configurar Vitest y escribir pruebas para esquemas Zod.
+- [x] **Tests de Integración**: Pruebas de API con Supertest y mocks de BD.
+- [x] **Linter & Formatter**: Configurar ESLint y Prettier.
 
 ## 4. DevOps y Producción
 - [ ] **Variables de Entorno**: Crear `.env.example` y definir estrategia de secretos para producción.

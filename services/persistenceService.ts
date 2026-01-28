@@ -38,7 +38,7 @@ export const persistenceService = {
   async logout(): Promise<void> {
     try {
       await fetchWithAuth(`${API_BASE}/auth/logout`, { method: 'POST' });
-    } catch {}
+    } catch { /* ignore */ }
   },
 
   // NOTIFICATIONS PRODUCTION METHODS
