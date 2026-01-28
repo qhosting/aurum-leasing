@@ -2,9 +2,9 @@
 
 ## 1. Seguridad (Prioridad Alta)
 - [x] **Protección de API Keys**: Mover integración de Gemini AI al backend (`/api/ai/analyze`).
-- [ ] **Hash de Contraseñas**: Implementar hashing (bcrypt/argon2) para `users.password`. Actualmente se almacenan en texto plano en la base de datos y migraciones.
-- [ ] **Saneamiento de Inputs**: Implementar validación de esquemas (Zod/Joi) en todos los endpoints del backend para prevenir inyección SQL y XSS.
-- [ ] **Rate Limiting**: Configurar `express-rate-limit` para prevenir abuso de la API.
+- [x] **Hash de Contraseñas**: Implementar hashing (bcrypt) para `users.password` en login y seed data.
+- [x] **Saneamiento de Inputs**: Implementar validación de esquemas (Zod) en todos los endpoints del backend.
+- [x] **Rate Limiting**: Configurar `express-rate-limit` global y específico para login.
 
 ## 2. Autenticación y Sesiones
 - [ ] **JWT / Sesiones Seguras**: Reemplazar el login simple por un sistema robusto basado en JWT (HttpOnly cookies) o sesiones en Redis.

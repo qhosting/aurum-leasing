@@ -9,6 +9,13 @@ import compression from 'compression';
 import { fileURLToPath } from 'url';
 import migrate from 'node-pg-migrate';
 import { GoogleGenAI, SchemaType } from "@google/genai";
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+import {
+  loginSchema, fleetSchema, paymentReportSchema, paymentVerifySchema,
+  driverProfileSchema, notificationReadSchema, aiAnalyzeSchema
+} from './schemas.js';
+import bcrypt from 'bcrypt';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +49,21 @@ app.use(cors() as any);
 app.use(express.json() as any);
 app.use(express.static(path.join(__dirname, 'dist')) as any);
 
+// Rate Limiting
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.'
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // limit each IP to 5 login requests per hour
+  message: 'Too many login attempts from this IP, please try again later.'
+});
+
+app.use('/api/', globalLimiter);
+
 const runMigrations = async () => {
   console.log('📦 Aurum System: Sincronizando Esquema Maestro via node-pg-migrate...');
   try {
@@ -65,15 +87,26 @@ const runMigrations = async () => {
 };
 
 // Endpoints
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
-  const r = await pool.query('SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]);
-  if (r.rows.length > 0) { 
-    await redis.incr('global_visits'); 
-    res.json({ success: true, user: r.rows[0] }); 
-  } else {
-    res.status(401).json({ success: false, error: 'Credenciales inválidas.' });
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
+  const validation = loginSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const { email, password } = validation.data;
+  const r = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+
+  if (r.rows.length > 0) {
+    const user = r.rows[0];
+    const match = await bcrypt.compare(password, user.password);
+    if (match) {
+      await redis.incr('global_visits');
+      // Do not return the hashed password in the response
+      const { password: _, ...userWithoutPassword } = user;
+      res.json({ success: true, user: userWithoutPassword });
+      return;
+    }
   }
+
+  res.status(401).json({ success: false, error: 'Credenciales inválidas.' });
 });
 
 app.get('/api/fleet', async (req, res) => {
@@ -83,14 +116,20 @@ app.get('/api/fleet', async (req, res) => {
 });
 
 app.post('/api/fleet', async (req, res) => {
-  const { plate, brand, model, tenant_id } = req.body;
+  const validation = fleetSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const { plate, brand, model, tenant_id } = validation.data;
   const id = `v-${Date.now()}`;
   await pool.query('INSERT INTO vehicles (id, plate, brand, model, tenant_id, data) VALUES ($1, $2, $3, $4, $5, $6)', [id, plate, brand, model, tenant_id, '{}']);
   res.json({ success: true, id });
 });
 
 app.post('/api/payments/report', async (req, res) => {
-  const { driver_id, tenant_id, amount, type } = req.body;
+  const validation = paymentReportSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const { driver_id, tenant_id, amount, type } = validation.data;
   const id = `p-${Date.now()}`;
   await pool.query('INSERT INTO payments (id, driver_id, tenant_id, amount, type, status) VALUES ($1, $2, $3, $4, $5, $6)', [id, driver_id, tenant_id, amount, type || 'renta', 'pending']);
   await pool.query('INSERT INTO notifications (id, role_target, title, message, type) VALUES ($1, $2, $3, $4, $5)', [`n-${id}`, 'Arrendador', 'Pago Reportado', `Monto: $${amount}`, 'payment']);
@@ -98,7 +137,10 @@ app.post('/api/payments/report', async (req, res) => {
 });
 
 app.post('/api/payments/verify', async (req, res) => {
-  const { payment_id, driver_id, amount } = req.body;
+  const validation = paymentVerifySchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const { payment_id, driver_id, amount } = validation.data;
   try {
     await pool.query('BEGIN');
     await pool.query('UPDATE payments SET status = \'verified\' WHERE id = $1', [payment_id]);
@@ -150,7 +192,10 @@ app.get('/api/drivers', async (req, res) => {
 });
 
 app.patch('/api/driver/profile', async (req, res) => {
-  const { id, data } = req.body;
+  const validation = driverProfileSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const { id, data } = validation.data;
   await pool.query('UPDATE drivers SET data = data || $2::jsonb WHERE id = $1', [id, JSON.stringify(data)]);
   res.json({ success: true });
 });
@@ -173,12 +218,18 @@ app.get('/api/notifications', async (req, res) => {
 });
 
 app.post('/api/notifications/read', async (req, res) => {
-  await pool.query('UPDATE notifications SET read = TRUE WHERE id = $1', [req.body.id]);
+  const validation = notificationReadSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  await pool.query('UPDATE notifications SET read = TRUE WHERE id = $1', [validation.data.id]);
   res.json({ success: true });
 });
 
 app.post('/api/ai/analyze', async (req, res) => {
-  const { vehicles, drivers } = req.body;
+  const validation = aiAnalyzeSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const { vehicles, drivers } = validation.data;
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
 
   if (!apiKey) {

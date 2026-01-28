@@ -14,11 +14,14 @@ exports.up = (pgm) => {
   `);
 
   // Users
+  // Passwords are now hashed with bcrypt (salt rounds = 10)
+  // admin123 -> $2b$10$1uqpApszxhY1gljz5ZtGxuZ.zhatIv0V6T5aBNR2l4pZ1IHEtEok2
+  // 123456 -> $2b$10$GiqRyMyef9vwwFSjTgArGODoMqKQjD5zFiu2XoAQfsfis/x3ckwt6
   pgm.sql(`
     INSERT INTO users (email, password, role, tenant_id) VALUES
-    ('root@aurumcapital.mx', 'admin123', 'Super Admin', NULL),
-    ('pro@aurum.mx', '123456', 'Arrendador', 't1'),
-    ('chofer@aurum.mx', '123456', 'Arrendatario', 't1');
+    ('root@aurumcapital.mx', '$2b$10$1uqpApszxhY1gljz5ZtGxuZ.zhatIv0V6T5aBNR2l4pZ1IHEtEok2', 'Super Admin', NULL),
+    ('pro@aurum.mx', '$2b$10$GiqRyMyef9vwwFSjTgArGODoMqKQjD5zFiu2XoAQfsfis/x3ckwt6', 'Arrendador', 't1'),
+    ('chofer@aurum.mx', '$2b$10$GiqRyMyef9vwwFSjTgArGODoMqKQjD5zFiu2XoAQfsfis/x3ckwt6', 'Arrendatario', 't1');
   `);
 
   // Drivers
