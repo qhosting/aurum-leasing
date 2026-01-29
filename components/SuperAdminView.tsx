@@ -10,7 +10,7 @@ import {
   CloudLightning, CheckCircle2
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { ArrendadoraAccount, ServicePlan } from '../types';
+import { ArrendadoraAccount, ServicePlan } from '../shared/types';
 import { persistenceService } from '../services/persistenceService';
 
 interface SuperAdminViewProps {

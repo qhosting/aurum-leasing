@@ -1,5 +1,5 @@
 
-import { Vehicle, VehicleStatus, Driver, PaymentRecord, AmortizationInstallment, ArrendadoraAccount, ServicePlan } from './types';
+import { Vehicle, VehicleStatus, Driver, PaymentRecord, AmortizationInstallment, ArrendadoraAccount, ServicePlan } from './shared/types';
 
 const generateInstallments = (count: number, amount: number, paidCount: number): AmortizationInstallment[] => {
   return Array.from({ length: count }, (_, i) => ({

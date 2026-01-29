@@ -48,3 +48,9 @@ export const resetPasswordSchema = z.object({
   token: z.string().min(1),
   newPassword: z.string().min(6)
 });
+
+export const whatsappSendSchema = z.object({
+  chatId: z.string().min(1),
+  text: z.string().min(1),
+  session: z.string().optional()
+});

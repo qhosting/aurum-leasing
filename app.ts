@@ -13,8 +13,11 @@ import { z } from 'zod';
 import {
   loginSchema, fleetSchema, paymentReportSchema, paymentVerifySchema,
   driverProfileSchema, notificationReadSchema, aiAnalyzeSchema,
-  forgotPasswordSchema, resetPasswordSchema
+  forgotPasswordSchema, resetPasswordSchema, whatsappSendSchema
 } from './schemas.js';
+import { sendWhatsappMessage } from './services/whatsappService.js';
+import { upload, handleFileUpload } from './services/documentService.js';
+import { generateStatement } from './services/reportService.js';
 import bcrypt from 'bcrypt';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
@@ -37,7 +40,7 @@ export const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-export const redis = new Redis('redis://default:5faf81de3571e8b7146c@qhosting_redis:6379');
+export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -269,7 +272,7 @@ app.post('/api/notifications/read', async (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/ai/analyze', async (req, res) => {
+app.post('/api/ai/analyze', authenticateToken, async (req, res) => {
   const validation = aiAnalyzeSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error });
 
@@ -360,5 +363,19 @@ app.get('/api/super/plans', authenticateToken, authorizeRoles('Super Admin'), as
   const r = await pool.query('SELECT * FROM plans');
   res.json(r.rows);
 });
+
+// WAHA Integration
+app.post('/api/whatsapp/send', authenticateToken, authorizeRoles('Super Admin', 'Arrendador'), async (req, res) => {
+  const validation = whatsappSendSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  await sendWhatsappMessage(req, res);
+});
+
+// Document Upload
+app.post('/api/documents/upload', authenticateToken, upload.single('file'), handleFileUpload);
+
+// Reports
+app.get('/api/reports/statement/:driverId', authenticateToken, generateStatement);
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
