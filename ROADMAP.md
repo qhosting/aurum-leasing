@@ -17,9 +17,9 @@
 - [x] **Linter & Formatter**: Configurar ESLint y Prettier.
 
 ## 4. DevOps y Producción
-- [ ] **Variables de Entorno**: Crear `.env.example` y definir estrategia de secretos para producción.
+- [x] **Variables de Entorno**: Crear `.env.example` y definir estrategia de secretos para producción.
 - [ ] **Docker Compose**: Refinar `Dockerfile` y `docker-compose.yml` para un despliegue fácil.
-- [ ] **CI/CD**: Configurar GitHub Actions para tests y despliegue automático.
+- [x] **CI/CD**: Configurar GitHub Actions para tests y despliegue automático.
 
 ## 5. Funcionalidades Futuras
 - [ ] **Integración Real con WhatsApp**: Reemplazar mocks con cliente real de Waha/Twilio.
