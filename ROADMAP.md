@@ -22,6 +22,4 @@
 - [x] **CI/CD**: Configurar GitHub Actions para tests y despliegue automático.
 
 ## 5. Funcionalidades Futuras
-- [ ] **Integración Real con WhatsApp**: Reemplazar mocks con cliente real de Waha/Twilio.
-- [ ] **Telemetría en Tiempo Real**: Ingesta de datos de GPS reales en lugar de mocks.
-- [ ] **Pasarela de Pagos**: Integrar Stripe/Openpay para cobros automatizados.
+- [ ] **Integración Real con WhatsApp**: Reemplazar mocks con cliente real de Waha (Endpoint implementado en `/api/whatsapp/send`).

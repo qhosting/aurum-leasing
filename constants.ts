@@ -145,7 +145,6 @@ export const MOCK_PLANS: ServicePlan[] = [
     features: [
       'IA Preventiva Gemini Lite',
       'Conciliación de Pagos n8n',
-      'Telemetría Geotab Integrada',
       'Firma Digital de Contratos',
       'Soporte 24/7 Prioritario',
       'Módulo de Análisis de Riesgo'

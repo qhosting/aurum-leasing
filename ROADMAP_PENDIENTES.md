@@ -3,15 +3,9 @@
 Este documento detalla las funcionalidades y mejoras que aún están pendientes tras la fase inicial de estabilización y seguridad.
 
 ## 1. Integraciones Reales (Prioridad Media)
-- [ ] **WhatsApp API (Waha/Twilio)**:
+- [ ] **WhatsApp API (Waha)**:
     - Actualmente se utilizan mocks en `services/integrationService.ts`.
-    - Objetivo: Implementar cliente real para envío de alertas de pago y notificaciones a choferes.
-- [ ] **Pasarela de Pagos (Stripe/Openpay)**:
-    - Actualmente los pagos se registran manualmente o vía mock.
-    - Objetivo: Integrar webhooks para conciliación automática de pagos.
-- [ ] **Telemetría GPS (Geotab/Samsara)**:
-    - Actualmente se usa simulación de datos en `RiskAIView`.
-    - Objetivo: Ingesta de datos en tiempo real para análisis de riesgo preciso.
+    - Objetivo: Completar la migración para usar el endpoint `/api/whatsapp/send` en todo el sistema.
 
 ## 2. Mejoras de Infraestructura (DevOps)
 - [ ] **Docker Compose para Desarrollo**:
