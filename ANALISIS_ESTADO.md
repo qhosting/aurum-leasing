@@ -33,17 +33,15 @@ El proyecto es una aplicación web Full-Stack para gestión de leasing vehicular
 
 ## 3. Pendientes por Implementar
 
-1.  **Seguridad de API Keys**:
-    - La integración con Google Gemini (`geminiService.ts`) se ejecuta en el cliente. **Crítico**: Mover esta lógica a un endpoint del backend (ej: `/api/ai/analyze`) para proteger la `API_KEY`.
+1.  **Integraciones Reales**:
+    - Conectar con API oficial de WhatsApp (actualmente usa mock/WAHA proxy) y pasarelas de pago reales.
 
-2.  **Autenticación y Sesiones**:
-    - El login actual es básico (consulta directa de usuario/pass). Se recomienda implementar JWT o sesiones seguras con Redis.
+2.  **Refactorización Profunda**:
+    - Unificar totalmente el manejo de tipos entre frontend y backend (actualmente en `shared/types.ts`).
 
-3.  **Manejo de Errores y Validación**:
-    - El backend carece de validación robusta de tipos en los payloads (ej. usando `zod`).
+## 4. Implementaciones Completadas (Recientes)
 
-4.  **Tests Automatizados**:
-    - No se encontraron pruebas unitarias ni de integración (`vitest` o `jest`).
-
-5.  **Entorno de Producción**:
-    - Faltan configuraciones reales de entorno (`.env.production`) y pipelines de CI/CD.
+-   **Seguridad**: Se movió la lógica de Gemini al backend (`/api/ai/analyze`), se implementó hashing de contraseñas (`bcrypt`), rate limiting y validación de inputs (`zod`).
+-   **Autenticación**: Se implementó sistema JWT con cookies HttpOnly y middleware de roles.
+-   **Calidad**: Se configuró Vitest para testing y ESLint/Prettier para linting.
+-   **DevOps**: Se añadieron Docker Compose y workflows de GitHub Actions.

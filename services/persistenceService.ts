@@ -16,7 +16,7 @@ export interface LoginResponse {
 }
 
 // Helper to include credentials in all fetch calls
-const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   return fetch(url, {
     ...options,
     credentials: 'include' // Important for HttpOnly cookies

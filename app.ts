@@ -7,7 +7,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import { fileURLToPath } from 'url';
-import { GoogleGenAI, SchemaType } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import {
@@ -305,21 +305,21 @@ app.post('/api/ai/analyze', authenticateToken, async (req, res) => {
       config: {
         responseMimeType: "application/json",
         responseSchema: {
-          type: SchemaType.OBJECT,
+          type: Type.OBJECT,
           properties: {
             risks: {
-              type: SchemaType.ARRAY,
+              type: Type.ARRAY,
               items: {
-                type: SchemaType.OBJECT,
+                type: Type.OBJECT,
                 properties: {
-                  title: { type: SchemaType.STRING, description: "Short title of the risk" },
-                  description: { type: SchemaType.STRING, description: "Detailed explanation of the risk" }
+                  title: { type: Type.STRING, description: "Short title of the risk" },
+                  description: { type: Type.STRING, description: "Detailed explanation of the risk" }
                 }
               }
             },
             recommendations: {
-              type: SchemaType.ARRAY,
-              items: { type: SchemaType.STRING, description: "Specific actionable recommendation" }
+              type: Type.ARRAY,
+              items: { type: Type.STRING, description: "Specific actionable recommendation" }
             }
           }
         }
