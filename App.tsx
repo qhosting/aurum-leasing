@@ -17,7 +17,7 @@ import CompanySettingsView from './components/CompanySettingsView';
 import SuperAdminView from './components/SuperAdminView';
 import ArrendatarioView from './components/ArrendatarioView';
 import ArrendatarioSettingsView from './components/ArrendatarioSettingsView';
-import { UserRole, Vehicle, Driver, Notification } from './types';
+import { UserRole, Vehicle, Driver, Notification } from './shared/types';
 import { persistenceService } from './services/persistenceService';
 
 // --- COMPONENTE: NOTIFICATION CENTER ---

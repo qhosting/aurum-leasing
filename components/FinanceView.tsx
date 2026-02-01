@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { MOCK_DRIVERS, MOCK_PAYMENTS, MOCK_VEHICLES } from '../constants';
-import { Driver, AmortizationInstallment, PaymentRecord, VehicleStatus, Notification } from '../types';
+import { Driver, AmortizationInstallment, PaymentRecord, VehicleStatus, Notification } from '../shared/types';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { VehicleStatus, Vehicle, MaintenanceRecord } from '../types';
+import { VehicleStatus, Vehicle, MaintenanceRecord } from '../shared/types';
 import { 
   Search, Plus, Car, ShieldCheck, 
   Wrench, X, Settings2,

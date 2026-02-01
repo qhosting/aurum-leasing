@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "80:80"
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/aurum-leasing-db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-secret-key-123
+      - NODE_ENV=development
+      # WAHA Configuration
+      - WAHA_URL=http://waha:3000
+    depends_on:
+      - db
+      - redis
+      - waha
+    volumes:
+      - ./uploads:/app/uploads
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=aurum-leasing-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  waha:
+    image: devlikeapro/waha-plus:latest
+    environment:
+      - WHATSAPP_DEFAULT_ENGINE=WEBJS
+    ports:
+      - "3000:3000"
+    volumes:
+      - waha_data:/app/sessions
+
+volumes:
+  postgres_data:
+  waha_data:

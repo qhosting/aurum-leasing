@@ -1,5 +1,6 @@
 
 import { MOCK_TENANTS } from "../constants";
+import { fetchWithAuth } from "./persistenceService";
 
 /**
  * Aurum Integration Service (Multi-tenant)
@@ -7,31 +8,28 @@ import { MOCK_TENANTS } from "../constants";
  */
 
 export const sendWhatsAppMessage = async (tenantId: string, phone: string, message: string) => {
-  const tenant = MOCK_TENANTS.find(t => t.id === tenantId);
-  if (!tenant || !tenant.integrationSettings.wahaUrl) {
-    console.error(`[WAHA] No config found for tenant ${tenantId}`);
-    return { success: false, error: 'No configuration' };
-  }
-
-  const { wahaUrl, wahaToken } = tenant.integrationSettings;
-  console.log(`[WAHA] (${tenant.companyName}) Enviando a ${phone}...`);
+  // Now using backend proxy /api/whatsapp/send
+  // TenantId is passed as session for multi-tenancy support in WAHA if configured
+  console.log(`[WAHA] Sending to ${phone} via Backend Proxy...`);
   
   try {
-    const response = await fetch(`${wahaUrl}/api/sendText`, {
+    const response = await fetchWithAuth('/api/whatsapp/send', {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${wahaToken}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chatId: `${phone}@c.us`,
+        chatId: `${phone.replace('+', '')}@c.us`,
         text: message,
-        session: 'default'
+        session: 'default' // Using default session for now, could use tenantId
       }),
     });
-    return { success: response.ok, timestamp: new Date().toISOString() };
+
+    if (!response.ok) {
+        throw new Error(`Backend Error: ${response.status}`);
+    }
+
+    return { success: true, timestamp: new Date().toISOString() };
   } catch (error) {
-    console.error("Waha Error:", error);
+    console.error("Waha/Backend Error:", error);
     return { success: false, error };
   }
 };

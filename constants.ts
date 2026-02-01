@@ -1,5 +1,5 @@
 
-import { Vehicle, VehicleStatus, Driver, PaymentRecord, AmortizationInstallment, ArrendadoraAccount, ServicePlan } from './types';
+import { Vehicle, VehicleStatus, Driver, PaymentRecord, AmortizationInstallment, ArrendadoraAccount, ServicePlan } from './shared/types';
 
 const generateInstallments = (count: number, amount: number, paidCount: number): AmortizationInstallment[] => {
   return Array.from({ length: count }, (_, i) => ({
@@ -145,7 +145,6 @@ export const MOCK_PLANS: ServicePlan[] = [
     features: [
       'IA Preventiva Gemini Lite',
       'Conciliación de Pagos n8n',
-      'Telemetría Geotab Integrada',
       'Firma Digital de Contratos',
       'Soporte 24/7 Prioritario',
       'Módulo de Análisis de Riesgo'
