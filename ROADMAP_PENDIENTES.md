@@ -1,24 +1,182 @@
-# Roadmap de Pendientes por Implementar
+# ⚠️ ROADMAP PENDIENTES - AURUM LEASING
+## Tareas Críticas, Features Productivas & Deuda Técnica
 
-Este documento detalla las funcionalidades y mejoras que aún están pendientes tras la fase inicial de estabilización y seguridad.
+---
 
-## 1. Integraciones Reales (Prioridad Media)
-- [ ] **WhatsApp API (Waha)**:
-    - Actualmente se utilizan mocks en `services/integrationService.ts`.
-    - Objetivo: Completar la migración para usar el endpoint `/api/whatsapp/send` en todo el sistema.
+## 🚨 **TAREAS CRÍTICAS (Alta Prioridad)**
 
-## 2. Mejoras de Infraestructura (DevOps)
-- [ ] **Docker Compose para Desarrollo**:
-    - Crear `docker-compose.yml` que levante la app, PostgreSQL y Redis localmente para facilitar el onboarding de nuevos desarrolladores.
-- [ ] **Despliegue Automático (CD)**:
-    - Configurar pipeline para desplegar a staging/producción tras pasar el CI.
+### **Seguridad**
+- [ ] **[ALTA]** Implementar rotación de JWT_SECRET en producción
+- [ ] **[ALTA]** Configurar HTTPS/TLS en producción (certificados SSL)
+- [ ] **[ALTA]** Implementar 2FA (Two-Factor Authentication) para Super Admins
+- [ ] **[ALTA]** Auditoría de seguridad de dependencias (`npm audit fix`)
+- [ ] **[ALTA]** Sanitización de inputs SQL (prevención de SQL injection)
+- [ ] **[ALTA]** Implementar CSRF tokens en formularios sensibles
+- [ ] **[MEDIA]** Logging de intentos de acceso fallidos (sistema de alertas)
+- [ ] **[MEDIA]** Configurar backup automático de base de datos PostgreSQL
 
-## 3. Funcionalidades de Negocio
-- [ ] **Reportes Avanzados**:
-    - Exportación a PDF/Excel de estados de cuenta.
-- [ ] **Gestión Documental**:
-    - Subida de contratos y documentos de identificación a almacenamiento en la nube (AWS S3 / Google Cloud Storage).
+### **Bugs Conocidos**
+- [ ] **[ALTA]** RiskAIView usa `MOCK_VEHICLES` en lugar de datos reales de API
+- [ ] **[ALTA]** Verificar que todas las migraciones se ejecuten correctamente en producción
+- [ ] **[MEDIA]** Validar que el sistema de uploads (`multer`) maneje correctamente archivos grandes
+- [ ] **[MEDIA]** Testear comportamiento del rate limiting en entornos con múltiples instancias
+- [ ] **[MEDIA]** Verificar aislamiento de datos entre tenants (multi-tenancy security)
 
-## 4. Mantenimiento
-- [ ] **Refactorización de Tipos**:
-    - Unificar definiciones de tipos entre frontend y backend (actualmente en `types.ts` compartido pero copiados en build).
+### **Performance**
+- [ ] **[ALTA]** Implementar índices de base de datos para queries frecuentes
+- [ ] **[ALTA]** Configurar compresión gzip/brotli en Nginx/producción
+- [ ] **[MEDIA]** Implementar lazy loading en componentes React grandes
+- [ ] **[MEDIA]** Optimizar queries SQL (evitar N+1 queries)
+- [ ] **[BAJA]** Implementar caché Redis para queries repetitivas
+
+---
+
+## 🚀 **FEATURES NECESARIAS PARA PRODUCCIÓN**
+
+### **Integraciones Reales**
+- [ ] **[ALTA]** Conectar pasarela de pago real (Stripe, MercadoPago, PayPal)
+- [ ] **[ALTA]** Integrar WhatsApp Business API oficial (reemplazar WAHA mock)
+- [ ] **[ALTA]** Implementar servicio de email transaccional (SendGrid, AWS SES)
+- [ ] **[MEDIA]** Integrar sistema de almacenamiento cloud (AWS S3, Google Cloud Storage)
+- [ ] **[MEDIA]** Conectar con API de verificación de identidad (KYC)
+- [ ] **[BAJA]** Integración con servicios de geolocalización para tracking de flota
+
+### **Gestión de Suscripciones**
+- [ ] **[ALTA]** Implementar lógica de expiración de planes
+- [ ] **[ALTA]** Sistema de facturación automática (invoicing)
+- [ ] **[MEDIA]** Panel de upgrade/downgrade de planes
+- [ ] **[MEDIA]** Notificaciones de renovación de suscripción
+- [ ] **[MEDIA]** Sistema de cupones y descuentos
+
+### **Dashboard & Reportes**
+- [ ] **[ALTA]** Dashboard en tiempo real con WebSockets (métricas live)
+- [ ] **[MEDIA]** Exportación de reportes financieros (CSV, Excel)
+- [ ] **[MEDIA]** Gráficos de uso de flota por período
+- [ ] **[MEDIA]** Reportes predictivos con IA (tendencias de pagos, riesgo)
+- [ ] **[BAJA]** Sistema de alertas configurables (email/WhatsApp)
+
+### **Gestión de Conductores**
+- [ ] **[ALTA]** Verificación de licencias de conducir (OCR + validación)
+- [ ] **[MEDIA]** Historial de infracciones y sanciones
+- [ ] **[MEDIA]** Sistema de evaluación de desempeño de conductores
+- [ ] **[BAJA]** Capacitaciones y certificaciones online
+
+### **Gestión de Flota Avanzada**
+- [ ] **[ALTA]** Tracking GPS en tiempo real
+- [ ] **[ALTA]** Sistema de mantenimiento preventivo (alertas por km/tiempo)
+- [ ] **[MEDIA]** Gestión de combustible y gastos operativos
+- [ ] **[MEDIA]** Historial completo de cada vehículo (mantenimiento, accidentes)
+- [ ] **[BAJA]** Integración con talleres mecánicos
+
+### **Experiencia de Usuario**
+- [ ] **[ALTA]** Versión móvil responsive (mobile-first design)
+- [ ] **[MEDIA]** App móvil nativa (React Native o Flutter)
+- [ ] **[MEDIA]** Modo oscuro (dark mode)
+- [ ] **[MEDIA]** Soporte multi-idioma (i18n - español, inglés, portugués)
+- [ ] **[BAJA]** Sistema de onboarding interactivo
+
+### **Notificaciones Push**
+- [ ] **[ALTA]** Implementar FCM (Firebase Cloud Messaging)
+- [ ] **[MEDIA]** Notificaciones de pago vencido
+- [ ] **[MEDIA]** Alertas de mantenimiento de vehículos
+- [ ] **[BAJA]** Recordatorios de renovación de documentos
+
+---
+
+## 🛠️ **DEUDA TÉCNICA**
+
+### **Arquitectura & Código**
+- [ ] **[ALTA]** Migrar de monolito a microservicios (backend modular)
+- [ ] **[ALTA]** Implementar GraphQL API (alternativa a REST)
+- [ ] **[MEDIA]** Unificar completamente tipos entre frontend y backend (`shared/types.ts`)
+- [ ] **[MEDIA]** Implementar patrón Repository para acceso a datos (desacoplar SQL)
+- [ ] **[MEDIA]** Refactorizar `App.tsx` (demasiado grande - 18KB)
+- [ ] **[MEDIA]** Crear sistema de feature flags para releases graduales
+- [ ] **[BAJA]** Implementar Server-Side Rendering (SSR) con Next.js
+
+### **Testing**
+- [ ] **[ALTA]** Aumentar cobertura de tests a >80% (actual: desconocida)
+- [ ] **[ALTA]** Implementar tests E2E con Playwright o Cypress
+- [ ] **[MEDIA]** Tests de carga y stress con Artillery o k6
+- [ ] **[MEDIA]** Tests de seguridad automatizados (OWASP ZAP)
+- [ ] **[BAJA]** Tests de accesibilidad (WCAG compliance)
+
+### **DevOps & CI/CD**
+- [ ] **[ALTA]** Configurar pipeline completo de CI/CD (build, test, deploy)
+- [ ] **[ALTA]** Implementar monitoreo y observabilidad (Prometheus, Grafana)
+- [ ] **[ALTA]** Configurar logs centralizados (ELK Stack, Datadog)
+- [ ] **[MEDIA]** Implementar blue-green deployment o canary releases
+- [ ] **[MEDIA]** Configurar auto-scaling en producción (Kubernetes)
+- [ ] **[MEDIA]** Dockerizar ambiente de desarrollo completo
+- [ ] **[BAJA]** Implementar disaster recovery plan
+
+### **Documentación**
+- [ ] **[ALTA]** Documentar API completa (OpenAPI/Swagger)
+- [ ] **[ALTA]** Crear guía de despliegue a producción (runbook)
+- [ ] **[MEDIA]** Documentar arquitectura de sistema (diagramas C4)
+- [ ] **[MEDIA]** Guía de contribución para desarrolladores
+- [ ] **[MEDIA]** Documentación de endpoints internos
+- [ ] **[BAJA]** Video tutoriales de uso del sistema
+
+### **Base de Datos**
+- [ ] **[ALTA]** Implementar migrations rollback strategy
+- [ ] **[MEDIA]** Configurar réplicas de lectura (read replicas)
+- [ ] **[MEDIA]** Implementar soft deletes en lugar de eliminaciones físicas
+- [ ] **[MEDIA]** Crear vistas materializadas para reportes complejos
+- [ ] **[BAJA]** Evaluar migración a TimescaleDB para datos temporales
+
+### **Optimización Frontend**
+- [ ] **[ALTA]** Implementar code splitting por ruta
+- [ ] **[MEDIA]** Optimizar bundle size (tree shaking, lazy loading)
+- [ ] **[MEDIA]** Implementar Service Worker real para PWA offline
+- [ ] **[MEDIA]** Caché de assets estáticos (CDN)
+- [ ] **[BAJA]** Migrar a Tailwind CSS v4 (cuando esté disponible)
+
+### **Infraestructura**
+- [ ] **[ALTA]** Configurar WAF (Web Application Firewall)
+- [ ] **[ALTA]** Implementar CDN para assets estáticos
+- [ ] **[MEDIA]** Configurar DNS con failover
+- [ ] **[MEDIA]** Implementar message queue (RabbitMQ, SQS) para tareas async
+- [ ] **[BAJA]** Evaluar serverless para funciones específicas (AWS Lambda)
+
+---
+
+## 📋 **MEJORAS DE CALIDAD DE CÓDIGO**
+
+- [ ] **[MEDIA]** Configurar SonarQube para análisis de código
+- [ ] **[MEDIA]** Implement commitlint para conventional commits
+- [ ] **[MEDIA]** Configurar Husky pre-commit hooks (lint, test)
+- [ ] **[MEDIA]** Añadir badges de CI/CD al README
+- [ ] **[BAJA]** Implementar semantic versioning automático
+
+---
+
+## 🔐 **COMPLIANCE & LEGAL**
+
+- [ ] **[ALTA]** Implementar sistema de consentimiento GDPR/LGPD
+- [ ] **[ALTA]** Política de privacidad y términos de servicio
+- [ ] **[MEDIA]** Sistema de portabilidad de datos (exportación de datos de usuario)
+- [ ] **[MEDIA]** Derecho al olvido (eliminación de cuenta completa)
+- [ ] **[BAJA]** Certificación ISO 27001
+
+---
+
+## 📊 **ANÁLISIS & MÉTRICAS**
+
+- [ ] **[ALTA]** Implementar Google Analytics o Mixpanel
+- [ ] **[MEDIA]** Dashboard de métricas de negocio (KPIs)
+- [ ] **[MEDIA]** Tracking de eventos de usuario (Segment, Amplitude)
+- [ ] **[BAJA]** Heatmaps y session recordings (Hotjar, FullStory)
+
+---
+
+**Prioridades Sugeridas para Sprint 1 (próximas 2 semanas):**
+1. Auditoría de seguridad completa (npm audit, OWASP)
+2. Implementar pasarela de pago real
+3. Aumentar cobertura de tests a 60%
+4. Configurar CI/CD pipeline básico
+5. Documentar API con Swagger
+
+**Total de Tareas Pendientes**: ~120  
+**Estimación de Tiempo para MVP Productivo**: 3-4 meses (con equipo de 3-4 devs)  
+**Última Actualización**: 2026-02-01
