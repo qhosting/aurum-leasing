@@ -1,4 +1,3 @@
-
 {
   "compilerOptions": {
     "target": "ESNext",
@@ -11,8 +10,24 @@
     "outDir": ".",
     "rootDir": ".",
     "allowJs": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["server.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "server.ts",
+    "app.ts",
+    "middleware.ts",
+    "schemas.ts",
+    "services/**/*.ts",
+    "shared/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "*.tsx",
+    "components",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
 }

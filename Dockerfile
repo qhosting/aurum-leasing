@@ -22,6 +22,11 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
+COPY --from=builder /app/app.js ./app.js
+COPY --from=builder /app/middleware.js ./middleware.js
+COPY --from=builder /app/schemas.js ./schemas.js
+COPY --from=builder /app/services ./services
+COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/migrations ./migrations
 

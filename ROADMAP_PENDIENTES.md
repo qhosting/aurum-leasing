@@ -34,7 +34,7 @@
 ## 🚀 **FEATURES NECESARIAS PARA PRODUCCIÓN**
 
 ### **Integraciones Reales**
-- [ ] **[ALTA]** Conectar pasarela de pago real (Stripe, MercadoPago, PayPal)
+- [ ] **[POSTERGADO]** Conectar pasarela de pago real (Stripe, MercadoPago, PayPal) <!-- Postergado por instrucción del usuario -->
 - [ ] **[ALTA]** Integrar WhatsApp Business API oficial (reemplazar WAHA mock)
 - [ ] **[ALTA]** Implementar servicio de email transaccional (SendGrid, AWS SES)
 - [ ] **[MEDIA]** Integrar sistema de almacenamiento cloud (AWS S3, Google Cloud Storage)
@@ -172,7 +172,7 @@
 
 **Prioridades Sugeridas para Sprint 1 (próximas 2 semanas):**
 1. Auditoría de seguridad completa (npm audit, OWASP)
-2. Implementar pasarela de pago real
+2. ~~Implementar pasarela de pago real~~ (Postergado)
 3. Aumentar cobertura de tests a 60%
 4. Configurar CI/CD pipeline básico
 5. Documentar API con Swagger
