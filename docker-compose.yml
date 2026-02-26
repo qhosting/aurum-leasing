@@ -4,14 +4,11 @@ services:
   app:
     build: .
     ports:
-      - "80:80"
+      - "5000:5000"
+    env_file:
+      - .env
     environment:
-      - DATABASE_URL=postgres://postgres:password@db:5432/aurum-leasing-db
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=dev-secret-key-123
-      - NODE_ENV=development
-      # WAHA Configuration
-      - WAHA_URL=http://waha:3000
+      - NODE_ENV=production
     depends_on:
       - db
       - redis

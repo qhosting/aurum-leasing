@@ -33,6 +33,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const app = express();
+app.set('trust proxy', 1);
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -47,6 +48,9 @@ export const pool = new Pool({
 MaintenanceService.setPool(pool);
 
 export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+redis.on('error', (err) => {
+  console.warn('[ioredis] No se pudo conectar a Redis. La caché estará desactivada:', err.message);
+});
 export const auditLogger = new AuditLogger(pool);
 
 app.use(helmet({
