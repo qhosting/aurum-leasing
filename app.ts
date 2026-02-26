@@ -1,7 +1,7 @@
 
 import express from 'express';
 import { Pool } from 'pg';
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import path from 'path';
 import fs from 'fs';
 import cors from 'cors';

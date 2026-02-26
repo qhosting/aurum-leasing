@@ -1,5 +1,5 @@
 
-import { Vehicle, Driver } from "../shared/types";
+import { Vehicle, Driver } from "../shared/types.js";
 
 export const analyzeFleetRisk = async (vehicles: Vehicle[], drivers: Driver[]) => {
   try {

@@ -1,5 +1,5 @@
 
-import { Vehicle, VehicleStatus, Driver, PaymentRecord, AmortizationInstallment, ArrendadoraAccount, ServicePlan } from './shared/types';
+import { Vehicle, VehicleStatus, Driver, PaymentRecord, AmortizationInstallment, ArrendadoraAccount, ServicePlan } from './shared/types.js';
 
 const generateInstallments = (count: number, amount: number, paidCount: number): AmortizationInstallment[] => {
   return Array.from({ length: count }, (_, i) => ({
@@ -13,8 +13,8 @@ const generateInstallments = (count: number, amount: number, paidCount: number):
 };
 
 export const MOCK_VEHICLES: Vehicle[] = [
-  { 
-    id: '1', plate: 'ABC-1234', brand: 'Toyota', model: 'Avanza', year: 2022, 
+  {
+    id: '1', plate: 'ABC-1234', brand: 'Toyota', model: 'Avanza', year: 2022,
     status: VehicleStatus.ACTIVE, lastMaintenance: '2024-04-10', nextMaintenanceKm: 50000,
     mileage: 45000, insuranceExpiry: '2024-12-15', verificationExpiry: '2024-06-20',
     purchasePrice: 22000, currentEstimatedValue: 18500, driverId: 'd1', maintenanceHistory: [],
@@ -32,8 +32,8 @@ export const MOCK_VEHICLES: Vehicle[] = [
       lastUpdate: new Date().toISOString()
     }
   },
-  { 
-    id: '2', plate: 'XYZ-9876', brand: 'Nissan', model: 'Versa', year: 2023, 
+  {
+    id: '2', plate: 'XYZ-9876', brand: 'Nissan', model: 'Versa', year: 2023,
     status: VehicleStatus.AVAILABLE, lastMaintenance: '2024-05-01', nextMaintenanceKm: 30000,
     mileage: 28500, insuranceExpiry: '2025-01-10', verificationExpiry: '2024-07-15',
     purchasePrice: 19500, currentEstimatedValue: 17800, maintenanceHistory: [],
@@ -54,21 +54,21 @@ export const MOCK_VEHICLES: Vehicle[] = [
 ];
 
 export const MOCK_DRIVERS: Driver[] = [
-  { 
-    id: 'd1', 
-    name: 'Juan Pérez', 
+  {
+    id: 'd1',
+    name: 'Juan Pérez',
     phone: '5215512345678',
-    balance: 150, 
-    lastPaymentDate: '2024-05-15', 
-    rating: 4.8, 
+    balance: 150,
+    lastPaymentDate: '2024-05-15',
+    rating: 4.8,
     isArrears: false,
     rentPlan: 'semanal',
     contractDate: '2023-01-10',
     securityDeposit: { total: 15000, paid: 15000 },
-    amortization: { 
-      totalValue: 25000, 
-      paidPrincipal: 15000, 
-      totalInstallments: 104, 
+    amortization: {
+      totalValue: 25000,
+      paidPrincipal: 15000,
+      totalInstallments: 104,
       installments: generateInstallments(10, 350, 8)
     }
   },
@@ -93,12 +93,12 @@ export const MOCK_DRIVERS: Driver[] = [
 ];
 
 export const MOCK_TENANTS: ArrendadoraAccount[] = [
-  { 
-    id: 't1', 
-    companyName: 'Aurum CDMX Sur', 
-    fleetSize: 45, 
-    status: 'active', 
-    plan: 'Enterprise', 
+  {
+    id: 't1',
+    companyName: 'Aurum CDMX Sur',
+    fleetSize: 45,
+    status: 'active',
+    plan: 'Enterprise',
     monthlyRevenue: 12500,
     integrationSettings: {
       wahaUrl: 'https://waha-cdmx.aurum-cloud.com',
@@ -106,12 +106,12 @@ export const MOCK_TENANTS: ArrendadoraAccount[] = [
       n8nWebhook: 'https://n8n.servicios.mx/webhook/cdmx-finance'
     }
   },
-  { 
-    id: 't2', 
-    companyName: 'Elite Leasing Monterrey', 
-    fleetSize: 22, 
-    status: 'active', 
-    plan: 'Pro', 
+  {
+    id: 't2',
+    companyName: 'Elite Leasing Monterrey',
+    fleetSize: 22,
+    status: 'active',
+    plan: 'Pro',
     monthlyRevenue: 4500,
     integrationSettings: {
       wahaUrl: 'https://waha-mty.elite.mx',

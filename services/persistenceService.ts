@@ -1,5 +1,5 @@
 
-import { Vehicle, Driver, PaymentRecord, UserRole, ArrendadoraAccount, ServicePlan, Notification } from '../shared/types';
+import { Vehicle, Driver, PaymentRecord, UserRole, ArrendadoraAccount, ServicePlan, Notification } from '../shared/types.js';
 
 const API_BASE = '/api';
 

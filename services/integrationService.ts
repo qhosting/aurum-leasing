@@ -1,6 +1,6 @@
 
-import { MOCK_TENANTS } from "../constants";
-import { fetchWithAuth } from "./persistenceService";
+import { MOCK_TENANTS } from "../constants.js";
+import { fetchWithAuth } from "./persistenceService.js";
 
 /**
  * Aurum Integration Service (Multi-tenant)
@@ -11,7 +11,7 @@ export const sendWhatsAppMessage = async (tenantId: string, phone: string, messa
   // Now using backend proxy /api/whatsapp/send
   // TenantId is passed as session for multi-tenancy support in WAHA if configured
   console.log(`[WAHA] Sending to ${phone} via Backend Proxy...`);
-  
+
   try {
     const response = await fetchWithAuth('/api/whatsapp/send', {
       method: 'POST',
@@ -24,7 +24,7 @@ export const sendWhatsAppMessage = async (tenantId: string, phone: string, messa
     });
 
     if (!response.ok) {
-        throw new Error(`Backend Error: ${response.status}`);
+      throw new Error(`Backend Error: ${response.status}`);
     }
 
     return { success: true, timestamp: new Date().toISOString() };
@@ -43,7 +43,7 @@ export const triggerN8nWorkflow = async (tenantId: string, event: string, data: 
 
   const { n8nWebhook } = tenant.integrationSettings;
   console.log(`[n8n] (${tenant.companyName}) Disparando evento: ${event}`);
-  
+
   try {
     const response = await fetch(n8nWebhook, {
       method: 'POST',
