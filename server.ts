@@ -16,7 +16,7 @@ const runMigrations = async () => {
   }
   console.log('📦 Aurum System: Sincronizando Esquema Maestro via node-pg-migrate...');
   try {
-    const migrationRunner = (migrate as any).default || migrate;
+    const migrationRunner = (migrate as any).runner || (migrate as any).default || migrate;
 
     await migrationRunner({
       databaseUrl: DATABASE_URL,
