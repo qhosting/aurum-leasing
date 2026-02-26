@@ -122,6 +122,13 @@ export const persistenceService = {
     } catch { return null; }
   },
 
+  async getArrendadorAnalytics(): Promise<any[]> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/arrendador/analytics`);
+      return await res.json();
+    } catch { return []; }
+  },
+
   async getVehicles(tenantId: string = 't1'): Promise<Vehicle[]> {
     try {
       const res = await fetchWithAuth(`${API_BASE}/fleet?tenant_id=${tenantId}`);
@@ -143,6 +150,44 @@ export const persistenceService = {
   async getDrivers(tenantId: string = 't1'): Promise<Driver[]> {
     try {
       const res = await fetchWithAuth(`${API_BASE}/drivers?tenant_id=${tenantId}`);
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async verifyLicense(driverId: string, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('license', file);
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/drivers/${driverId}/verify-license`, {
+        method: 'POST',
+        body: formData
+      });
+      return await res.json();
+    } catch { return { success: false }; }
+  },
+
+  // Maintenance Methods
+  async logMaintenance(vehicleId: string, data: any): Promise<any> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/maintenance/log`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicle_id: vehicleId, ...data })
+      });
+      return await res.json();
+    } catch { return { success: false }; }
+  },
+
+  async getMaintenanceHistory(vehicleId: string): Promise<any[]> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/maintenance/history/${vehicleId}`);
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async getMaintenanceAlerts(): Promise<any[]> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/maintenance/alerts`);
       return await res.json();
     } catch { return []; }
   },
@@ -174,5 +219,31 @@ export const persistenceService = {
       const res = await fetchWithAuth(`${API_BASE}/super/plans`);
       return await res.json();
     } catch { return []; }
+  },
+
+  // Subscription Methods
+  async getInvoices(tenantId: string): Promise<any[]> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/tenants/${tenantId}/invoices`);
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async upgradePlan(tenantId: string, planId: string): Promise<any> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/tenants/${tenantId}/plan`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_id: planId })
+      });
+      return await res.json();
+    } catch { return { success: false }; }
+  },
+
+  async getTenantDetails(tenantId: string): Promise<any> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/tenants/${tenantId}`);
+      return await res.json();
+    } catch { return null; }
   }
 };

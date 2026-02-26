@@ -14,7 +14,7 @@ export const generateStatement = async (req: Request, res: Response) => {
     // Let's assume strict equality for simplicity or Arrendador role.
   }
   if (user.role !== 'Arrendatario' && user.role !== 'Arrendador' && user.role !== 'Super Admin') {
-     return res.status(403).json({ error: 'Forbidden' });
+    return res.status(403).json({ error: 'Forbidden' });
   }
 
   try {
@@ -67,5 +67,35 @@ export const generateStatement = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('PDF Generation Error:', error);
     if (!res.headersSent) res.status(500).json({ error: 'Error generating PDF' });
+  }
+};
+
+export const exportPaymentsCSV = async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const tenantId = user.tenant_id;
+
+  if (user.role !== 'Arrendador' && user.role !== 'Super Admin') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const query = tenantId
+      ? 'SELECT p.*, d.name as driver_name FROM payments p JOIN drivers d ON p.driver_id = d.id WHERE p.tenant_id = $1 ORDER BY p.created_at DESC'
+      : 'SELECT p.*, d.name as driver_name FROM payments p JOIN drivers d ON p.driver_id = d.id ORDER BY p.created_at DESC';
+
+    const params = tenantId ? [tenantId] : [];
+    const r = await pool.query(query, params);
+
+    let csv = 'ID,Fecha,Conductor,Monto,Tipo,Estado\n';
+    r.rows.forEach(row => {
+      csv += `${row.id},${new Date(row.created_at).toISOString()},"${row.driver_name}",${row.amount},${row.type},${row.status}\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=reporte_pagos.csv');
+    res.send(csv);
+  } catch (error) {
+    console.error('CSV Export Error:', error);
+    res.status(500).json({ error: 'Error generating CSV' });
   }
 };

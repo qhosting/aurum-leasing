@@ -41,7 +41,12 @@ El proyecto es una aplicación web Full-Stack para gestión de leasing vehicular
 
 ## 4. Implementaciones Completadas (Recientes)
 
--   **Seguridad**: Se movió la lógica de Gemini al backend (`/api/ai/analyze`), se implementó hashing de contraseñas (`bcrypt`), rate limiting y validación de inputs (`zod`).
--   **Autenticación**: Se implementó sistema JWT con cookies HttpOnly y middleware de roles.
+-   **Seguridad**: Se movió la lógica de Gemini al backend (`/api/ai/analyze`), se implementó hashing de contraseñas (`bcrypt`), rate limiting y validación de inputs (`zod`). Se corrigieron vulnerabilidades de aislamiento de multi-tenancy y se implementó un sistema de Audit Logging para eventos de acceso. Se auditaron y actualizaron dependencias críticas.
+-   **Autenticación**: Se implementó sistema JWT con cookies HttpOnly y middleware de roles. Se aseguraron endpoints de notificaciones.
 -   **Calidad**: Se configuró Vitest para testing y ESLint/Prettier para linting.
+-   **Performance**: Se implementaron índices de base de datos, compresión Gzip, lazy loading en el frontend, optimización de queries SQL (agrupación de consultas) y una capa de caché con Redis para estadísticas.
+-   **Suscripciones**: Implementado sistema de facturación, lógica de expiración de planes, auto-renovación y panel de gestión en `CompanySettingsView`.
+-   **Dashboard & Reportes**: Implementada exportación a CSV, gráficos dinámicos con datos reales de recaudación (30 días) y resúmenes ejecutivos impulsados por Gemini AI.
+-   **Conductores**: Implementado OCR de licencias con Gemini AI (multimodal), panel de gestión de expedientes y estados de verificación en tiempo real.
+-   **Mantenimiento**: Implementado sistema de alertas por km, bitácora de servicios preventivos/correctivos y flujos de actualización de kilometraje con disparadores de notificaciones.
 -   **DevOps**: Se añadieron Docker Compose y workflows de GitHub Actions.

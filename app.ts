@@ -3,6 +3,7 @@ import express from 'express';
 import { Pool } from 'pg';
 import Redis from 'ioredis';
 import path from 'path';
+import fs from 'fs';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -13,16 +14,20 @@ import { z } from 'zod';
 import {
   loginSchema, fleetSchema, paymentReportSchema, paymentVerifySchema,
   driverProfileSchema, notificationReadSchema, aiAnalyzeSchema,
-  forgotPasswordSchema, resetPasswordSchema, whatsappSendSchema
+  forgotPasswordSchema, resetPasswordSchema, whatsappSendSchema,
+  planUpdateSchema
 } from './schemas.js';
 import { sendWhatsappMessage } from './services/whatsappService.js';
 import { upload, handleFileUpload } from './services/documentService.js';
-import { generateStatement } from './services/reportService.js';
+import { generateStatement, exportPaymentsCSV } from './services/reportService.js';
 import bcrypt from 'bcrypt';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { authenticateToken, authorizeRoles } from './middleware.js';
+import { AuditLogger, AuditAction } from './services/auditService.js';
+import { SubscriptionService } from './services/subscriptionService.js';
+import { MaintenanceService } from './services/maintenanceService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,8 +44,10 @@ export const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+MaintenanceService.setPool(pool);
 
 export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+export const auditLogger = new AuditLogger(pool);
 
 app.use(helmet({
   contentSecurityPolicy: {
@@ -103,10 +110,26 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
         maxAge: 8 * 60 * 60 * 1000 // 8 hours
       });
 
+      await auditLogger.log({
+        action: AuditAction.LOGIN_SUCCESS,
+        user_id: user.id,
+        email: user.email,
+        ip_address: req.ip,
+        user_agent: req.get('user-agent')
+      });
+
       res.json({ success: true, user: userWithoutPassword });
       return;
     }
   }
+
+  await auditLogger.log({
+    action: AuditAction.LOGIN_FAILURE,
+    email: email,
+    ip_address: req.ip,
+    user_agent: req.get('user-agent'),
+    details: { reason: 'Invalid credentials or user not found' }
+  });
 
   res.status(401).json({ success: false, error: 'Credenciales inválidas.' });
 });
@@ -130,6 +153,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     // In a real implementation:
     // await sendEmail(email, "Restablecer contraseña", `Link: https://app.aurum-leasing.mx/reset?token=${token}`);
     console.log(`[EMAIL MOCK] To: ${email} | Subject: Reset Password | Token: ${token}`);
+
+    await auditLogger.log({
+      action: AuditAction.PASSWORD_RESET_REQUEST,
+      email: email,
+      ip_address: req.ip
+    });
   }
 
   // Always return success to prevent user enumeration
@@ -155,8 +184,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 app.get('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
-  const { tenant_id } = req.query;
-  const r = await pool.query('SELECT * FROM vehicles WHERE tenant_id = $1', [tenant_id || 't1']);
+  const tenantId = (req as any).user.tenant_id;
+  const r = await pool.query('SELECT * FROM vehicles WHERE tenant_id = $1', [tenantId]);
   res.json(r.rows);
 });
 
@@ -200,23 +229,65 @@ app.post('/api/payments/verify', authenticateToken, authorizeRoles('Arrendador')
 });
 
 app.get('/api/arrendador/stats', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
-  const { tenant_id } = req.query;
-  const tId = tenant_id || 't1';
-  try {
-    const fleet = await pool.query('SELECT COUNT(*) FROM vehicles WHERE tenant_id = $1', [tId]);
-    const active = await pool.query('SELECT COUNT(*) FROM vehicles WHERE tenant_id = $1 AND status = \'Activo\'', [tId]);
-    const arrears = await pool.query('SELECT SUM(ABS(balance)) FROM drivers WHERE tenant_id = $1 AND balance < 0', [tId]);
-    const revenue = await pool.query('SELECT SUM(amount) FROM payments WHERE tenant_id = $1 AND status = \'verified\'', [tId]);
+  const tenantId = (req as any).user.tenant_id;
+  if (!tenantId) return res.status(400).json({ error: 'Tenant ID missing in session' });
 
-    res.json({
-      totalAssetsValue: parseInt(fleet.rows[0].count) * 20000,
-      occupancyRate: (parseInt(active.rows[0].count) / (parseInt(fleet.rows[0].count) || 1)) * 100,
-      totalArrears: parseFloat(arrears.rows[0].sum || 0),
-      totalRevenue: parseFloat(revenue.rows[0].sum || 0),
+  const cacheKey = `stats:${tenantId}`;
+
+  try {
+    // Try to get from cache first
+    const cachedStats = await redis.get(cacheKey);
+    if (cachedStats) {
+      return res.json(JSON.parse(cachedStats));
+    }
+
+    const r = await pool.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM vehicles WHERE tenant_id = $1) as fleet_count,
+        (SELECT COUNT(*) FROM vehicles WHERE tenant_id = $1 AND status = 'Activo') as active_count,
+        (SELECT SUM(ABS(balance)) FROM drivers WHERE tenant_id = $1 AND balance < 0) as total_arrears,
+        (SELECT SUM(amount) FROM payments WHERE tenant_id = $1 AND status = 'verified') as total_revenue
+    `, [tenantId]);
+
+    const stats = r.rows[0];
+    const fleetCount = parseInt(stats.fleet_count);
+    const activeCount = parseInt(stats.active_count);
+
+    const result = {
+      totalAssetsValue: fleetCount * 20000,
+      occupancyRate: (activeCount / (fleetCount || 1)) * 100,
+      totalArrears: parseFloat(stats.total_arrears || 0),
+      totalRevenue: parseFloat(stats.total_revenue || 0),
       criticalActions: [{ title: 'Mantenimiento Pendiente', ref: 'ABC-123' }]
-    });
+    };
+
+    // Store in cache for 5 minutes
+    await redis.setex(cacheKey, 300, JSON.stringify(result));
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: 'Error calculando estadísticas' });
+  }
+});
+
+app.get('/api/arrendador/analytics', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
+  const tenantId = (req as any).user.tenant_id;
+  try {
+    const r = await pool.query(`
+      SELECT 
+        DATE_TRUNC('day', created_at) as date,
+        SUM(amount) as total_amount,
+        COUNT(*) as transaction_count
+      FROM payments
+      WHERE tenant_id = $1 AND status = 'Verified'
+      AND created_at > NOW() - INTERVAL '30 days'
+      GROUP BY date
+      ORDER BY date ASC
+    `, [tenantId]);
+
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Error obteniendo analíticos' });
   }
 });
 
@@ -233,8 +304,8 @@ app.get('/api/driver/payments', authenticateToken, async (req, res) => {
 });
 
 app.get('/api/drivers', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
-  const { tenant_id } = req.query;
-  const r = await pool.query('SELECT * FROM drivers WHERE tenant_id = $1', [tenant_id || 't1']);
+  const tenantId = (req as any).user.tenant_id;
+  const r = await pool.query('SELECT * FROM drivers WHERE tenant_id = $1', [tenantId]);
   res.json(r.rows);
 });
 
@@ -252,15 +323,15 @@ app.get('/api/driver/vehicle', authenticateToken, async (req, res) => {
   res.json(r.rows[0]);
 });
 
-app.post('/api/notifications/clear', async (req, res) => {
-  const { role, user_id } = req.query;
-  await pool.query('UPDATE notifications SET read = TRUE WHERE (role_target = $1 OR user_id = $2)', [role, user_id]);
+app.post('/api/notifications/clear', authenticateToken, async (req, res) => {
+  const { role, id: user_id } = (req as any).user;
+  await pool.query('UPDATE notifications SET read = TRUE WHERE (role_target = $1 OR user_id = $2)', [role, user_id.toString()]);
   res.json({ success: true });
 });
 
-app.get('/api/notifications', async (req, res) => {
-  const { role, user_id } = req.query;
-  const r = await pool.query('SELECT * FROM notifications WHERE (role_target = $1 OR user_id = $2) AND read = FALSE ORDER BY created_at DESC', [role, user_id]);
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+  const { role, id: user_id } = (req as any).user;
+  const r = await pool.query('SELECT * FROM notifications WHERE (role_target = $1 OR user_id = $2) AND read = FALSE ORDER BY created_at DESC', [role, user_id.toString()]);
   res.json(r.rows.map(n => ({ ...n, timestamp: new Date(n.created_at).toLocaleTimeString() })));
 });
 
@@ -343,15 +414,24 @@ app.get('/api/stats/visits', async (req, res) => {
 });
 
 app.get('/api/super/stats', authenticateToken, authorizeRoles('Super Admin'), async (req, res) => {
-  const mrr = await pool.query('SELECT SUM(p.monthly_price) FROM tenants t JOIN plans p ON t.plan_id = p.id');
-  const fleet = await pool.query('SELECT COUNT(*) FROM vehicles');
-  const tenants = await pool.query('SELECT COUNT(*) FROM tenants WHERE status = \'active\'');
-  res.json({
-    totalMrr: parseFloat(mrr.rows[0].sum || 0),
-    totalFleet: parseInt(fleet.rows[0].count),
-    activeTenants: parseInt(tenants.rows[0].count),
-    suspendedTenants: 0
-  });
+  try {
+    const r = await pool.query(`
+      SELECT 
+        (SELECT SUM(p.monthly_price) FROM tenants t JOIN plans p ON t.plan_id = p.id) as total_mrr,
+        (SELECT COUNT(*) FROM vehicles) as total_fleet,
+        (SELECT COUNT(*) FROM tenants WHERE status = 'active') as active_tenants
+    `);
+
+    const stats = r.rows[0];
+    res.json({
+      totalMrr: parseFloat(stats.total_mrr || 0),
+      totalFleet: parseInt(stats.total_fleet || 0),
+      activeTenants: parseInt(stats.active_tenants || 0),
+      suspendedTenants: 0
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Error calculando estadísticas globales' });
+  }
 });
 
 app.get('/api/super/tenants', authenticateToken, authorizeRoles('Super Admin'), async (req, res) => {
@@ -377,5 +457,153 @@ app.post('/api/documents/upload', authenticateToken, upload.single('file'), hand
 
 // Reports
 app.get('/api/reports/statement/:driverId', authenticateToken, generateStatement);
+app.get('/api/reports/payments/csv', authenticateToken, exportPaymentsCSV);
+
+// --- Driver License Verification with Gemini AI ---
+app.post('/api/drivers/:id/verify-license', authenticateToken, upload.single('license'), async (req, res) => {
+  const { id } = req.params;
+  if (!req.file) return res.status(400).json({ error: 'No se proporcionó imagen de la licencia' });
+
+  const apiKey = process.env.GEMINI_API_KEY || 'AIza...';
+  const ai = new GoogleGenAI({ apiKey });
+
+  try {
+    const imageBuffer = fs.readFileSync(req.file.path);
+    const base64Image = imageBuffer.toString('base64');
+
+    const prompt = `
+      Analiza esta imagen de una licencia de conducir (México). 
+      Extrae:
+      1. Número de licencia (license_number)
+      2. Fecha de vencimiento (license_expiry) en formato YYYY-MM-DD.
+      
+      Retorna un JSON válido.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            { inlineData: { data: base64Image, mimeType: req.file.mimetype } }
+          ]
+        }
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            license_number: { type: Type.STRING },
+            license_expiry: { type: Type.STRING }
+          }
+        }
+      }
+    });
+
+    const data = JSON.parse(response.text || "{}");
+
+    // Validar si la fecha es válida para PostgreSQL
+    const expiry = data.license_expiry && !isNaN(Date.parse(data.license_expiry)) ? data.license_expiry : null;
+
+    // Actualizar base de datos
+    await pool.query(
+      'UPDATE drivers SET license_number = $1, license_expiry = $2, license_status = $3, is_verified = true, last_ocr_at = NOW() WHERE id = $4',
+      [data.license_number, expiry, 'valid', id]
+    );
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("AI License Verification Error:", err);
+    res.status(500).json({ error: 'Fallo al procesar la licencia con IA' });
+  }
+});
+
+// --- Maintenance Routes ---
+app.post('/api/maintenance/log', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
+  const { vehicle_id, ...data } = req.body;
+  try {
+    const result = await MaintenanceService.logMaintenance(vehicle_id, data);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Error registrando mantenimiento' });
+  }
+});
+
+app.get('/api/maintenance/history/:vehicleId', authenticateToken, async (req, res) => {
+  const { vehicleId } = req.params;
+  try {
+    const r = await pool.query('SELECT * FROM maintenance_logs WHERE vehicle_id = $1 ORDER BY date DESC', [vehicleId]);
+    res.json(r.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Error obteniendo historial' });
+  }
+});
+
+app.get('/api/maintenance/alerts', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
+  const tenantId = (req as any).user.tenant_id;
+  try {
+    const alerts = await MaintenanceService.checkMaintenanceAlerts(tenantId);
+    res.json(alerts);
+  } catch (err) {
+    res.status(500).json({ error: 'Error obteniendo alertas' });
+  }
+});
+
+app.get('/api/tenants/:id', authenticateToken, async (req, res) => {
+  const tenantId = req.params.id;
+  if ((req as any).user.role !== 'Super Admin' && (req as any).user.tenant_id !== tenantId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const r = await pool.query(`
+    SELECT t.*, p.name as plan_name, p.monthly_price as plan_price
+    FROM tenants t 
+    LEFT JOIN plans p ON t.plan_id = p.id 
+    WHERE t.id = $1
+  `, [tenantId]);
+
+  if (r.rows.length === 0) return res.status(404).json({ error: 'Tenant not found' });
+  res.json(r.rows[0]);
+});
+
+// --- Subscription management ---
+app.patch('/api/tenants/:id/plan', authenticateToken, authorizeRoles('Super Admin', 'Arrendador'), async (req, res) => {
+  const validation = planUpdateSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error });
+
+  const tenantId = req.params.id;
+  // Security check: Arrendador can only update their own tenant
+  if ((req as any).user.role === 'Arrendador' && (req as any).user.tenant_id !== tenantId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const result = await SubscriptionService.upgradePlan(tenantId, validation.data.plan_id);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/tenants/:id/invoices', authenticateToken, async (req, res) => {
+  const tenantId = req.params.id;
+  if ((req as any).user.role !== 'Super Admin' && (req as any).user.tenant_id !== tenantId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  const r = await pool.query('SELECT * FROM invoices WHERE tenant_id = $1 ORDER BY created_at DESC', [tenantId]);
+  res.json(r.rows);
+});
+
+// Run background task for subscriptions every 24 hours
+setInterval(() => {
+  SubscriptionService.processSubscriptions();
+}, 24 * 60 * 60 * 1000);
+
+// Initial run after start
+setTimeout(() => SubscriptionService.processSubscriptions(), 5000);
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));

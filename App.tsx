@@ -1,28 +1,29 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  Layout, Users, Car, DollarSign, Settings, 
-  BrainCircuit, ShieldCheck, Building2, UserCircle, 
+import {
+  Layout, Users, Car, DollarSign, Settings,
+  BrainCircuit, ShieldCheck, Building2, UserCircle,
   LogOut, ChevronDown, Download, WifiOff, X, Menu as MenuIcon,
-  Loader2, CheckCircle2, ArrowRight, Zap, Globe, Shield, 
+  Loader2, CheckCircle2, ArrowRight, Zap, Globe, Shield,
   ChevronRight, Mail, Lock, Sparkles, Star, TrendingUp,
   CreditCard, Smartphone, MapPin, Navigation, MousePointer2,
   Bell, Clock, Trash2
 } from 'lucide-react';
-import DashboardView from './components/DashboardView';
-import FleetView from './components/FleetView';
-import FinanceView from './components/FinanceView';
-import RiskAIView from './components/RiskAIView';
-import CompanySettingsView from './components/CompanySettingsView';
-import SuperAdminView from './components/SuperAdminView';
-import ArrendatarioView from './components/ArrendatarioView';
-import ArrendatarioSettingsView from './components/ArrendatarioSettingsView';
+const DashboardView = React.lazy(() => import('./components/DashboardView'));
+const FleetView = React.lazy(() => import('./components/FleetView'));
+const DriversView = React.lazy(() => import('./components/DriversView'));
+const FinanceView = React.lazy(() => import('./components/FinanceView'));
+const RiskAIView = React.lazy(() => import('./components/RiskAIView'));
+const CompanySettingsView = React.lazy(() => import('./components/CompanySettingsView'));
+const SuperAdminView = React.lazy(() => import('./components/SuperAdminView'));
+const ArrendatarioView = React.lazy(() => import('./components/ArrendatarioView'));
+const ArrendatarioSettingsView = React.lazy(() => import('./components/ArrendatarioSettingsView'));
 import { UserRole, Vehicle, Driver, Notification } from './shared/types';
 import { persistenceService } from './services/persistenceService';
 
 // --- COMPONENTE: NOTIFICATION CENTER ---
-const NotificationCenter: React.FC<{ 
-  notifications: Notification[]; 
+const NotificationCenter: React.FC<{
+  notifications: Notification[];
   onMarkRead: (id: string) => void;
   onClear: () => void;
   isOpen: boolean;
@@ -44,15 +45,14 @@ const NotificationCenter: React.FC<{
           </div>
         ) : (
           notifications.map((n) => (
-            <div 
-              key={n.id} 
+            <div
+              key={n.id}
               onClick={() => onMarkRead(n.id)}
               className={`p-5 border-b border-slate-50 cursor-pointer transition-colors hover:bg-slate-50 flex gap-4 ${!n.read ? 'bg-amber-50/30' : ''}`}
             >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                n.type === 'payment' ? 'bg-emerald-100 text-emerald-600' : 
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${n.type === 'payment' ? 'bg-emerald-100 text-emerald-600' :
                 n.type === 'alert' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'
-              }`}>
+                }`}>
                 {n.type === 'payment' ? <DollarSign className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
               </div>
               <div className="flex-1">
@@ -98,7 +98,7 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
             <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center font-black text-slate-900 text-xl shadow-lg">A</div>
             <span className="text-xl font-black tracking-tighter uppercase italic">Aurum</span>
           </div>
-          <button 
+          <button
             onClick={onStart}
             className="px-6 py-3 bg-white text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 transition-all shadow-xl"
           >
@@ -110,7 +110,7 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
       <main className="pt-48 pb-32 px-6 max-w-7xl mx-auto relative">
         <div className="max-w-4xl relative z-10">
           <div className="inline-flex items-center gap-3 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-500 text-[10px] font-black uppercase tracking-widest mb-8">
-            <Sparkles className="w-3 h-3" /> 
+            <Sparkles className="w-3 h-3" />
             {isLocating ? "Detectando ubicación..." : `Sede: ${userLocation || "México"}`}
           </div>
           <h1 className="text-6xl md:text-9xl font-black tracking-tighter italic leading-[0.85] mb-10">
@@ -121,7 +121,7 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
           <p className="text-lg md:text-2xl text-slate-400 font-medium max-w-2xl mb-12">
             Gestión de activos móviles de alto rendimiento para flotas Enterprise, impulsada por Gemini AI Pro.
           </p>
-          <button 
+          <button
             onClick={onStart}
             className="px-12 py-7 bg-amber-500 text-slate-900 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.3em] flex items-center gap-3 shadow-2xl hover:scale-105 active:scale-95 transition-all"
           >
@@ -144,13 +144,13 @@ const App: React.FC = () => {
   const [globalVisits, setGlobalVisits] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  
+
   const refreshData = useCallback(async () => {
     if (!role) return;
     setIsDataLoaded(false);
     const stats = await persistenceService.getGlobalStats();
     setGlobalVisits(stats.visits);
-    
+
     const userId = role === UserRole.ARRENDATARIO ? 'd1' : '';
     const notifs = await persistenceService.getNotifications(role, userId);
     setNotifications(notifs);
@@ -169,15 +169,17 @@ const App: React.FC = () => {
     if (view === 'app') refreshData();
   }, [view, refreshData]);
 
-  const handleLogin = (selectedRole: UserRole) => {
-    setRole(selectedRole);
+  const handleLogin = (user: any) => {
+    setRole(user.role as UserRole);
     setView('app');
-    localStorage.setItem('aurum_session_role', selectedRole);
+    localStorage.setItem('aurum_session_role', user.role);
+    localStorage.setItem('aurum_user', JSON.stringify(user));
   };
 
   const handleLogout = useCallback(() => {
     if (confirm('¿Cerrar sesión en Aurum Leasing?')) {
       localStorage.removeItem('aurum_session_role');
+      localStorage.removeItem('aurum_user');
       setRole(null);
       setView('landing');
       setActiveTab('dashboard');
@@ -204,6 +206,7 @@ const App: React.FC = () => {
         return [
           { id: 'dashboard', label: 'Dashboard', icon: <Layout className="w-5 h-5" /> },
           { id: 'fleet', label: 'Flota', icon: <Car className="w-5 h-5" /> },
+          { id: 'drivers', label: 'Conductores', icon: <Users className="w-5 h-5" /> },
           { id: 'finance', label: 'Finanzas', icon: <DollarSign className="w-5 h-5" /> },
           { id: 'risk', label: 'Riesgo AI', icon: <BrainCircuit className="w-5 h-5" /> },
           { id: 'settings', label: 'Mi Empresa', icon: <Settings className="w-5 h-5" /> },
@@ -240,7 +243,7 @@ const App: React.FC = () => {
           ))}
         </nav>
         <div className="p-4 border-t border-white/5 bg-slate-950/50">
-           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 px-2 italic">Accesos Globales: {globalVisits}</p>
+          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 px-2 italic">Accesos Globales: {globalVisits}</p>
           <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 p-3 text-rose-400 hover:text-rose-300 text-xs font-bold uppercase tracking-widest transition-colors">
             <LogOut className="w-4 h-4" /> Cerrar Sesión
           </button>
@@ -252,7 +255,7 @@ const App: React.FC = () => {
           <h2 className="text-3xl font-black text-slate-900 tracking-tight uppercase italic underline decoration-amber-500 underline-offset-8">{activeTab}</h2>
           <div className="flex items-center gap-4">
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
                 className={`w-12 h-12 rounded-2xl border flex items-center justify-center relative transition-all ${isNotificationsOpen ? 'bg-slate-900 text-white border-slate-900 shadow-xl' : 'bg-white text-slate-600 border-slate-200'}`}
               >
@@ -269,26 +272,29 @@ const App: React.FC = () => {
           <div className="flex items-center justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-amber-500" /></div>
         ) : (
           <div className="animate-in fade-in duration-700">
-            {role === UserRole.ARRENDADOR && (
-              <>
-                {activeTab === 'dashboard' && <DashboardView />}
-                {activeTab === 'fleet' && <FleetView />}
-                {activeTab === 'finance' && <FinanceView refreshGlobalNotifs={refreshData} />}
-                {activeTab === 'risk' && <RiskAIView />}
-                {activeTab === 'settings' && <CompanySettingsView onLogout={handleLogout} />}
-              </>
-            )}
-            {role === UserRole.SUPER_ADMIN && (
-              <>
-                {activeTab === 'dashboard' && <SuperAdminView onLogout={handleLogout} />}
-                {activeTab === 'settings' && <CompanySettingsView onLogout={handleLogout} />}
-              </>
-            )}
-            {role === UserRole.ARRENDATARIO && (
-              <>
-                {activeTab === 'dashboard' ? <ArrendatarioView refreshGlobalNotifs={refreshData} /> : <ArrendatarioSettingsView onLogout={handleLogout} />}
-              </>
-            )}
+            <React.Suspense fallback={<div className="flex items-center justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-amber-500" /></div>}>
+              {role === UserRole.ARRENDADOR && (
+                <>
+                  {activeTab === 'dashboard' && <DashboardView />}
+                  {activeTab === 'fleet' && <FleetView />}
+                  {activeTab === 'drivers' && <DriversView />}
+                  {activeTab === 'finance' && <FinanceView refreshGlobalNotifs={refreshData} />}
+                  {activeTab === 'risk' && <RiskAIView />}
+                  {activeTab === 'settings' && <CompanySettingsView onLogout={handleLogout} />}
+                </>
+              )}
+              {role === UserRole.SUPER_ADMIN && (
+                <>
+                  {activeTab === 'dashboard' && <SuperAdminView onLogout={handleLogout} />}
+                  {activeTab === 'settings' && <CompanySettingsView onLogout={handleLogout} />}
+                </>
+              )}
+              {role === UserRole.ARRENDATARIO && (
+                <>
+                  {activeTab === 'dashboard' ? <ArrendatarioView refreshGlobalNotifs={refreshData} /> : <ArrendatarioSettingsView onLogout={handleLogout} />}
+                </>
+              )}
+            </React.Suspense>
           </div>
         )}
       </main>
@@ -296,7 +302,7 @@ const App: React.FC = () => {
   );
 };
 
-const LoginView: React.FC<{ onLogin: (role: UserRole) => void; onBack: () => void }> = ({ onLogin, onBack }) => {
+const LoginView: React.FC<{ onLogin: (user: any) => void; onBack: () => void }> = ({ onLogin, onBack }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -309,7 +315,7 @@ const LoginView: React.FC<{ onLogin: (role: UserRole) => void; onBack: () => voi
     try {
       const res = await persistenceService.login(email, password);
       if (res.success && res.user) {
-        onLogin(res.user.role as UserRole);
+        onLogin(res.user);
       } else {
         setError(res.error || 'Credenciales inválidas.');
       }

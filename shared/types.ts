@@ -87,15 +87,18 @@ export interface Vehicle {
   brand: string;
   year: number;
   status: VehicleStatus;
-  lastMaintenance: string;
-  nextMaintenanceKm: number;
+  lastMaintenance?: string;
+  nextMaintenanceKm?: number;
+  next_maintenance_km?: number; // DB field
   mileage: number;
-  insuranceExpiry: string;
-  verificationExpiry: string;
-  purchasePrice: number;
-  currentEstimatedValue: number;
-  driverId?: string; 
-  maintenanceHistory: MaintenanceRecord[];
+  insuranceExpiry?: string;
+  insurance_expiry?: string; // DB field
+  verificationExpiry?: string;
+  verification_expiry?: string; // DB field
+  purchasePrice?: number;
+  currentEstimatedValue?: number;
+  driverId?: string;
+  maintenanceHistory?: MaintenanceRecord[];
   monthlyRent: number;
   securityDeposit: number;
   interestRate: number;
@@ -112,6 +115,11 @@ export interface Driver {
   isArrears: boolean;
   rentPlan: 'diario' | 'semanal' | 'mensual';
   contractDate: string;
+  licenseNumber?: string;
+  licenseExpiry?: string;
+  licenseStatus?: 'valid' | 'expired' | 'unverified';
+  licenseFrontUrl?: string;
+  isVerified?: boolean;
   securityDeposit: {
     total: number;
     paid: number;

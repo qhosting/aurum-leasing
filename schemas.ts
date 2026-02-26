@@ -54,3 +54,7 @@ export const whatsappSendSchema = z.object({
   text: z.string().min(1),
   session: z.string().optional()
 });
+
+export const planUpdateSchema = z.object({
+  plan_id: z.string().min(1)
+});
