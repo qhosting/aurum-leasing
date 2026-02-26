@@ -2,7 +2,7 @@
 import { app } from './app.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import migrate from 'node-pg-migrate';
+import * as migrate from 'node-pg-migrate';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,7 +17,7 @@ const runMigrations = async () => {
   console.log('📦 Aurum System: Sincronizando Esquema Maestro via node-pg-migrate...');
   try {
     const migrationRunner = (migrate as any).default || migrate;
-    
+
     await migrationRunner({
       databaseUrl: DATABASE_URL,
       dir: path.join(__dirname, 'migrations'),
