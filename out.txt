@@ -1,0 +1,23 @@
+Sincronizando base de datos...
+ÔØî Error sincronizando DB: error: null value in column "id" of relation "users" violates not-null constraint
+    at C:\Users\Admin\Proyectos\aurum-leasing\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async fixPasswords (file:///C:/Users/Admin/Proyectos/aurum-leasing/fix_passwords.js:26:13) {
+  length: 321,
+  severity: 'ERROR',
+  code: '23502',
+  detail: 'Failing row contains (null, root@aurumcapital.mx, $2b$10$1uqpApszxhY1gljz5ZtGxuZ.zhatIv0V6T5aBNR2l4pZ1IHEtEok2, Super Admin, null, {}, 2026-02-26 18:22:39.837876).',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: 'public',
+  table: 'users',
+  column: 'id',
+  dataType: undefined,
+  constraint: undefined,
+  file: 'execMain.c',
+  line: '2022',
+  routine: 'ExecConstraints'
+}
