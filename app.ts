@@ -194,7 +194,7 @@ app.get('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (re
   res.json(r.rows);
 });
 
-app.post('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (req outcome, res) => {
+app.post('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
   const validation = fleetSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error });
 
@@ -610,6 +610,101 @@ setInterval(() => {
 
 // Initial run after start
 setTimeout(() => SubscriptionService.processSubscriptions(), 5000);
+
+
+
+// --- Transport Unit (Tractocamion) Management Routes ---
+
+// 3. Get Detailed Unit Info (Vehicle + Driver + Docs)
+app.get('/api/fleet/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const tenantId = (req as any).user.tenant_id;
+
+  try {
+    const vehicleRes = await pool.query('SELECT * FROM vehicles WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    if (vehicleRes.rows.length === 0) return res.status(404).json({ error: 'Unidad no encontrada' });
+
+    const vehicle = vehicleRes.rows[0];
+    let driver = null;
+    if (vehicle.driver_id) {
+       const driverRes = await pool.query('SELECT * FROM drivers WHERE id = $1', [vehicle.driver_id]);
+       driver = driverRes.rows[0];
+    }
+
+    const docsRes = await pool.query('SELECT * FROM documents WHERE entity_id = $1 OR entity_id = $2', [vehicle.id, vehicle.driver_id]);
+    
+    res.json({
+      success: true,
+      vehicle,
+      driver,
+      documents: docsRes.rows
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener detalle de la unidad' });
+  }
+});
+
+// 4. List Documents for a Unit
+app.get('/api/fleet/:id/documents', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const r = await pool.query('SELECT * FROM documents WHERE entity_id = $1 ORDER BY created_at DESC', [id]);
+  res.json(r.rows);
+});
+
+// 5. Update Transport Unit
+app.patch('/api/fleet/transportista/:id', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
+  const { id } = req.params;
+  const { vehicle, driver } = req.body;
+  const tenantId = (req as any).user.tenant_id;
+
+  try {
+    await pool.query('BEGIN');
+    
+    // Update Vehicle
+    if (vehicle) {
+      await pool.query(
+        `UPDATE vehicles SET 
+         plate = COALESCE($1, plate), brand = COALESCE($2, brand), model = COALESCE($3, model),
+         color = COALESCE($4, color), sct_permit = COALESCE($5, sct_permit), 
+         insurance_policy = COALESCE($6, insurance_policy), insurance_company = COALESCE($7, insurance_company),
+         trailer_plate = COALESCE($8, trailer_plate)
+         WHERE id = $9 AND tenant_id = $10`,
+        [
+          vehicle.plate, vehicle.brand, vehicle.model, vehicle.color, vehicle.sct_permit,
+          vehicle.insurance_policy, vehicle.insurance_company, vehicle.trailer_plate, id, tenantId
+        ]
+      );
+    }
+
+    // Update Driver if driver_id is present
+    if (driver && driver.id) {
+      await pool.query(
+        'UPDATE drivers SET name = COALESCE($1, name), rfc = COALESCE($2, rfc), zip_code = COALESCE($3, zip_code) WHERE id = $4 AND tenant_id = $5',
+        [driver.name, driver.rfc, driver.zip_code, driver.id, tenantId]
+      );
+    }
+
+    await pool.query('COMMIT');
+    res.json({ success: true });
+  } catch (err: any) {
+    await pool.query('ROLLBACK');
+    res.status(500).json({ error: 'Error al actualizar unidad' });
+  }
+});
+
+// 6. Delete Unit
+app.delete('/api/fleet/:id', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
+  const { id } = req.params;
+  const tenantId = (req as any).user.tenant_id;
+
+  try {
+    await pool.query('DELETE FROM vehicles WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
+    // Note: Documents are kept in the database by default as history unless explicitly requested to delete.
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar unidad' });
+  }
+});
 
 
 
