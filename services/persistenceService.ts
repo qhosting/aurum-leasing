@@ -245,5 +245,37 @@ export const persistenceService = {
       const res = await fetchWithAuth(`${API_BASE}/tenants/${tenantId}`);
       return await res.json();
     } catch { return null; }
+  },
+
+  // --- Transport Unit Specialized Methods ---
+  async extractTransportData(files: File[]): Promise<any> {
+    const formData = new FormData();
+    files.forEach(file => formData.append('docs', file));
+    
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/ai/extract-unit`, {
+        method: 'POST',
+        body: formData
+      });
+      return await res.json();
+    } catch { return { error: 'Error al conectar con el servicio de IA' }; }
+  },
+
+  async saveTransportUnit(data: { vehicle: any, driver: any, documents: any[] }): Promise<any> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/fleet/transportista`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch { return { error: 'Error al dar de alta la unidad' }; }
+  },
+
+  async getTransportUnitDetail(id: string): Promise<any> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/fleet/${id}`);
+      return await res.json();
+    } catch { return null; }
   }
 };

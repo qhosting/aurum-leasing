@@ -11,7 +11,7 @@ import {
   Calendar, Info, Check, History, Activity, AlertCircle,
   MapPin, Compass, Thermometer, Droplet, Fuel,
   Orbit, Wind, Navigation, Heart, Loader2,
-  CheckCircle2, User
+  CheckCircle2, User, FileUp, Sparkles, Truck
 } from 'lucide-react';
 import { persistenceService } from '../services/persistenceService';
 import MaintenanceModal from './MaintenanceModal';
@@ -33,12 +33,18 @@ const FleetView: React.FC<FleetViewProps> = ({ isAddingExternal, onDrawerClose }
   const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
   const [isLoggingMaintenance, setIsLoggingMaintenance] = useState(false);
 
+  // --- Transportista State ---
+  const [unitType, setUnitType] = useState<'standard' | 'transportista'>('standard');
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractedDocs, setExtractedDocs] = useState<File[]>([]);
+  const [newDriver, setNewDriver] = useState<any>({ name: '', rfc: '', zip_code: '' });
+  
   const [newVehicle, setNewVehicle] = useState<Partial<Vehicle>>({
     brand: '', model: '', plate: '', year: new Date().getFullYear(),
     mileage: 0, status: VehicleStatus.AVAILABLE, monthlyRent: 8000,
     securityDeposit: 15000, interestRate: 1.5, nextMaintenanceKm: 5000,
-    insuranceExpiry: '2025-06-01', verificationExpiry: '2025-06-01',
-    maintenanceHistory: []
+    unit_type: 'standard', color: '', sct_permit: '', insurance_policy: '',
+    insurance_company: '', trailer_plate: ''
   });
 
   const fetchData = async () => {
@@ -69,10 +75,52 @@ const FleetView: React.FC<FleetViewProps> = ({ isAddingExternal, onDrawerClose }
     });
   }, [searchTerm, activeFilter, vehicles]);
 
+  const handleAIExtraction = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const files = Array.from(e.target.files);
+    setExtractedDocs(files);
+    setIsExtracting(true);
+
+    const result = await persistenceService.extractTransportData(files);
+    if (result.success && result.data) {
+      const d = result.data;
+      setNewVehicle(prev => ({
+        ...prev,
+        brand: d.vehicle_brand || prev.brand,
+        model: d.vehicle_model || prev.model,
+        plate: d.vehicle_plate || prev.plate,
+        color: d.vehicle_color || prev.color,
+        sct_permit: d.sct_permit || prev.sct_permit,
+        insurance_policy: d.insurance_policy || prev.insurance_policy,
+        insurance_company: d.insurance_company || prev.insurance_company,
+        trailer_plate: d.trailer_plate || prev.trailer_plate,
+        unit_type: 'transportista'
+      }));
+      setNewDriver({
+        name: d.driver_name || '',
+        rfc: d.rfc || '',
+        zip_code: d.zip_code || ''
+      });
+      setUnitType('transportista');
+    }
+    setIsExtracting(false);
+  };
+
   const handleSaveNewVehicle = async () => {
     if (!newVehicle.plate || !newVehicle.brand) return;
     setIsSaving(true);
-    const result = await persistenceService.saveVehicle(newVehicle);
+    
+    let result;
+    if (unitType === 'transportista') {
+      result = await persistenceService.saveTransportUnit({
+        vehicle: { ...newVehicle, unit_type: 'transportista' },
+        driver: newDriver,
+        documents: extractedDocs.map(f => ({ name: f.name, path: 'uploads/' + f.name, entity_type: 'vehicle' }))
+      });
+    } else {
+      result = await persistenceService.saveVehicle(newVehicle);
+    }
+
     if (result.success) {
       await fetchData();
       setIsAddingVehicle(false);
@@ -120,8 +168,8 @@ const FleetView: React.FC<FleetViewProps> = ({ isAddingExternal, onDrawerClose }
           <div key={v.id} onClick={() => setSelectedVehicle(v)} className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden active:scale-[0.98] transition-all duration-300 cursor-pointer group p-8 hover:shadow-2xl hover:border-amber-500/20">
             <div className="flex justify-between items-start mb-8">
               <div className="flex items-center gap-5">
-                <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center border border-slate-100 group-hover:bg-amber-500 group-hover:text-white transition-all transform group-hover:rotate-6">
-                  <Car className="w-8 h-8" />
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center border border-slate-100 group-hover:bg-amber-500 group-hover:text-white transition-all transform group-hover:rotate-6 ${v.unit_type === 'transportista' ? 'bg-indigo-50 text-indigo-400' : 'bg-slate-50 text-slate-400'}`}>
+                  {v.unit_type === 'transportista' ? <Truck className="w-8 h-8" /> : <Car className="w-8 h-8" />}
                 </div>
                 <div>
                   <h4 className="font-black text-slate-900 text-lg leading-none">{v.brand} <span className="text-slate-400 font-bold">{v.model}</span></h4>
@@ -160,8 +208,8 @@ const FleetView: React.FC<FleetViewProps> = ({ isAddingExternal, onDrawerClose }
             <div className="p-10">
               <div className="flex justify-between items-center mb-10">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-amber-500 rounded-2xl flex items-center justify-center text-slate-900">
-                    <Car className="w-8 h-8" />
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white ${selectedVehicle.unit_type === 'transportista' ? 'bg-indigo-600' : 'bg-amber-500'}`}>
+                    {selectedVehicle.unit_type === 'transportista' ? <Truck className="w-8 h-8" /> : <Car className="w-8 h-8" />}
                   </div>
                   <div>
                     <h3 className="text-2xl font-black tracking-tight">{selectedVehicle.brand} {selectedVehicle.model}</h3>
@@ -183,9 +231,35 @@ const FleetView: React.FC<FleetViewProps> = ({ isAddingExternal, onDrawerClose }
                   <div className="grid grid-cols-2 gap-4">
                     <InfoItem icon={<Gauge className="w-4 h-4 text-amber-500" />} label="Kilometraje Actual" value={`${(selectedVehicle.mileage || 0).toLocaleString()} km`} />
                     <InfoItem icon={<Calendar className="w-4 h-4 text-amber-500" />} label="Año Modelo" value={selectedVehicle.year} />
-                    <InfoItem icon={<ShieldCheck className="w-4 h-4 text-amber-500" />} label="Seguro Vence" value={selectedVehicle.insurance_expiry || 'No registrado'} />
                     <InfoItem icon={<Activity className="w-4 h-4 text-amber-500" />} label="Estatus" value={selectedVehicle.status} />
+                    {selectedVehicle.color && <InfoItem icon={<Droplet className="w-4 h-4 text-amber-500" />} label="Color" value={selectedVehicle.color} /> }
                   </div>
+
+                  {selectedVehicle.unit_type === 'transportista' && (
+                    <div className="bg-indigo-50 border border-indigo-100 p-8 rounded-[3rem]">
+                      <h4 className="text-sm font-black text-indigo-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <Truck className="w-4 h-4" /> Especificaciones de Carga
+                      </h4>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Permiso SCT</p>
+                          <p className="text-sm font-black text-indigo-900 font-mono">{selectedVehicle.sct_permit || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Póliza de Seguro</p>
+                          <p className="text-sm font-black text-indigo-900">{selectedVehicle.insurance_policy || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Empresa Aseguradora</p>
+                          <p className="text-sm font-black text-indigo-900">{selectedVehicle.insurance_company || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Placa de Remolque</p>
+                          <p className="text-sm font-black text-indigo-900 font-mono">{selectedVehicle.trailer_plate || 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="bg-slate-900 p-8 rounded-[3rem] text-white overflow-hidden relative group">
                     <div className="flex items-center gap-3 mb-6">
@@ -264,13 +338,69 @@ const FleetView: React.FC<FleetViewProps> = ({ isAddingExternal, onDrawerClose }
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md animate-in fade-in" onClick={() => setIsAddingVehicle(false)}></div>
           <div className="relative w-full lg:max-w-xl bg-white h-full shadow-2xl p-12 overflow-y-auto animate-in slide-in-from-right duration-500 lg:rounded-l-[4rem]">
             <h3 className="text-3xl font-black italic uppercase mb-12">Registrar <span className="text-amber-500">Unidad</span></h3>
+            
+            <div className="flex gap-2 p-1.5 bg-slate-100 rounded-[2rem] mb-12">
+              <button 
+                onClick={() => setUnitType('standard')} 
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all flex items-center justify-center gap-2 ${unitType === 'standard' ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Car className="w-3 h-3" /> Estándar
+              </button>
+              <button 
+                onClick={() => setUnitType('transportista')} 
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-[1.5rem] transition-all flex items-center justify-center gap-2 ${unitType === 'transportista' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}
+              >
+                <Truck className="w-3 h-3" /> Transportista
+              </button>
+            </div>
+
+            {unitType === 'transportista' && (
+              <div className="mb-12">
+                <div className="relative bg-indigo-50 border-2 border-dashed border-indigo-200 rounded-[2.5rem] p-10 text-center group hover:border-indigo-500 transition-all">
+                  {isExtracting ? (
+                    <div className="py-4">
+                      <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mx-auto mb-4" />
+                      <p className="text-[10px] font-black text-indigo-900 uppercase tracking-widest animate-pulse">Analizando Documentos con IA...</p>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer block">
+                      <input type="file" multiple onChange={handleAIExtraction} className="hidden" />
+                      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm group-hover:scale-110 transition-transform">
+                        <Sparkles className="w-8 h-8 text-indigo-500" />
+                      </div>
+                      <p className="text-sm font-black text-indigo-900 mb-2">Carga Inteligente Aurum</p>
+                      <p className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">Arrastra Licencia, SCT o Seguro para auto-llenar</p>
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-8">
-              <div><label className={labelStyles}>Marca / Fabricante</label><input className={inputStyles} placeholder="Ej: Chevrolet" value={newVehicle.brand} onChange={e => setNewVehicle({ ...newVehicle, brand: e.target.value })} /></div>
-              <div><label className={labelStyles}>Modelo / Línea</label><input className={inputStyles} placeholder="Ej: Aveo NG" value={newVehicle.model} onChange={e => setNewVehicle({ ...newVehicle, model: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className={labelStyles}>Placa</label><input className={inputStyles} placeholder="ABC-1234" value={newVehicle.plate} onChange={e => setNewVehicle({ ...newVehicle, plate: e.target.value })} /></div>
+                <div><label className={labelStyles}>Marca</label><input className={inputStyles} placeholder="Ej: Freightliner" value={newVehicle.brand} onChange={e => setNewVehicle({ ...newVehicle, brand: e.target.value })} /></div>
+                <div><label className={labelStyles}>Modelo</label><input className={inputStyles} placeholder="Ej: Cascadia" value={newVehicle.model} onChange={e => setNewVehicle({ ...newVehicle, model: e.target.value })} /></div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className={labelStyles}>Placa Primary</label><input className={inputStyles} placeholder="ABC-1234" value={newVehicle.plate} onChange={e => setNewVehicle({ ...newVehicle, plate: e.target.value })} /></div>
                 <div><label className={labelStyles}>Año</label><input type="number" className={inputStyles} value={newVehicle.year} onChange={e => setNewVehicle({ ...newVehicle, year: parseInt(e.target.value) })} /></div>
               </div>
+
+              {unitType === 'transportista' && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className={labelStyles}>Permiso SCT</label><input className={inputStyles} placeholder="SCT-XXX" value={newVehicle.sct_permit} onChange={e => setNewVehicle({ ...newVehicle, sct_permit: e.target.value })} /></div>
+                    <div><label className={labelStyles}>Placa Remolque</label><input className={inputStyles} placeholder="R-45-XYZ" value={newVehicle.trailer_plate} onChange={e => setNewVehicle({ ...newVehicle, trailer_plate: e.target.value })} /></div>
+                  </div>
+                  <div><label className={labelStyles}>Nombre del Operador (Chofer)</label><input className={inputStyles} placeholder="Nombre completo" value={newDriver.name} onChange={e => setNewDriver({ ...newDriver, name: e.target.value })} /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className={labelStyles}>RFC Operador</label><input className={inputStyles} placeholder="ABCD901122XXX" value={newDriver.rfc} onChange={e => setNewDriver({ ...newDriver, rfc: e.target.value })} /></div>
+                    <div><label className={labelStyles}>CP Operador</label><input className={inputStyles} placeholder="52000" value={newDriver.zip_code} onChange={e => setNewDriver({ ...newDriver, zip_code: e.target.value })} /></div>
+                  </div>
+                </>
+              )}
+
               <button
                 onClick={handleSaveNewVehicle}
                 disabled={isSaving}

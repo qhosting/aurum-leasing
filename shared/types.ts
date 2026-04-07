@@ -89,12 +89,12 @@ export interface Vehicle {
   status: VehicleStatus;
   lastMaintenance?: string;
   nextMaintenanceKm?: number;
-  next_maintenance_km?: number; // DB field
+  next_maintenance_km?: number;
   mileage: number;
   insuranceExpiry?: string;
-  insurance_expiry?: string; // DB field
+  insurance_expiry?: string;
   verificationExpiry?: string;
-  verification_expiry?: string; // DB field
+  verification_expiry?: string;
   purchasePrice?: number;
   currentEstimatedValue?: number;
   driverId?: string;
@@ -103,12 +103,19 @@ export interface Vehicle {
   securityDeposit: number;
   interestRate: number;
   telemetry?: TelemetryData;
+  // Transport specific fields
+  unit_type?: 'standard' | 'transportista';
+  color?: string;
+  sct_permit?: string;
+  insurance_policy?: string;
+  insurance_company?: string;
+  trailer_plate?: string;
 }
 
 export interface Driver {
   id: string;
   name: string;
-  phone: string; // Añadido para notificaciones WhatsApp
+  phone: string;
   balance: number;
   lastPaymentDate: string;
   rating: number;
@@ -120,6 +127,8 @@ export interface Driver {
   licenseStatus?: 'valid' | 'expired' | 'unverified';
   licenseFrontUrl?: string;
   isVerified?: boolean;
+  rfc?: string;
+  zip_code?: string;
   securityDeposit: {
     total: number;
     paid: number;
