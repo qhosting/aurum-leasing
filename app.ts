@@ -15,11 +15,12 @@ import {
   loginSchema, fleetSchema, paymentReportSchema, paymentVerifySchema,
   driverProfileSchema, notificationReadSchema, aiAnalyzeSchema,
   forgotPasswordSchema, resetPasswordSchema, whatsappSendSchema,
-  planUpdateSchema
+  planUpdateSchema, transportDriverSchema
 } from './schemas.js';
 import { sendWhatsappMessage } from './services/whatsappService.js';
 import { upload, handleFileUpload } from './services/documentService.js';
 import { generateStatement, exportPaymentsCSV } from './services/reportService.js';
+import { aiService } from './services/aiService.js';
 import bcrypt from 'bcrypt';
 import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
@@ -193,7 +194,7 @@ app.get('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (re
   res.json(r.rows);
 });
 
-app.post('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
+app.post('/api/fleet', authenticateToken, authorizeRoles('Arrendador'), async (req outcome, res) => {
   const validation = fleetSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error });
 
@@ -609,5 +610,79 @@ setInterval(() => {
 
 // Initial run after start
 setTimeout(() => SubscriptionService.processSubscriptions(), 5000);
+
+
+
+// --- Transport Unit (Tractocamion) Special Endpoints ---
+
+// 1. AI Data Extraction from Documents
+app.post('/api/ai/extract-unit', authenticateToken, upload.array('docs', 5), async (req, res) => {
+  if (!req.files || (req.files as any[]).length === 0) {
+    return res.status(400).json({ error: 'No se subieron documentos para analizar.' });
+  }
+
+  const filePaths = (req.files as any[]).map(f => f.path);
+  
+  try {
+    const data = await aiService.extractTransportData(filePaths);
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error("AI Unit extraction error:", err.message);
+    res.status(500).json({ error: 'Fallo al procesar documentos con IA' });
+  }
+});
+
+// 2. Specialized Fleet Creation for Transport Units
+app.post('/api/fleet/transportista', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
+  const { vehicle, driver, documents } = req.body;
+
+  try {
+    await pool.query('BEGIN');
+
+    // 1. Handle Driver (Operador)
+    const driverId = driver.id || `d-tr-${Date.now()}`;
+    if (!driver.id) {
+       await pool.query(
+        'INSERT INTO drivers (id, name, rfc, zip_code, tenant_id) VALUES ($1, $2, $3, $4, $5)',
+        [driverId, driver.name, driver.rfc, driver.zip_code, (req as any).user.tenant_id]
+      );
+    } else {
+       await pool.query(
+        'UPDATE drivers SET rfc = $1, zip_code = $2, name = $3 WHERE id = $4',
+        [driver.rfc, driver.zip_code, driver.name, driverId]
+      );
+    }
+
+    // 2. Handle Vehicle (Tracto)
+    const vehicleId = `v-tr-${Date.now()}`;
+    await pool.query(
+      `INSERT INTO vehicles 
+       (id, plate, brand, model, unit_type, color, sct_permit, insurance_policy, insurance_company, trailer_plate, tenant_id, driver_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        vehicleId, vehicle.plate, vehicle.brand, vehicle.model, 'transportista',
+        vehicle.color, vehicle.sct_permit, vehicle.insurance_policy, vehicle.insurance_company,
+        vehicle.trailer_plate, (req as any).user.tenant_id, driverId
+      ]
+    );
+
+    // 3. Associate Backup Documents
+    if (documents && Array.isArray(documents)) {
+      for (const doc of documents) {
+        await pool.query(
+          'INSERT INTO documents (id, entity_type, entity_id, doc_type, file_path, original_name) VALUES ($1, $2, $3, $4, $5, $6)',
+          [`doc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`, doc.entity_type, doc.entity_type === 'driver' ? driverId : vehicleId, doc.type, doc.path, doc.name]
+        );
+      }
+    }
+
+    await pool.query('COMMIT');
+    res.json({ success: true, vehicleId, driverId });
+  } catch (err: any) {
+    await pool.query('ROLLBACK');
+    console.error("Transport Unit Creation Error:", err.message);
+    res.status(500).json({ error: 'Error al dar de alta la unidad de transporte.' });
+  }
+});
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));

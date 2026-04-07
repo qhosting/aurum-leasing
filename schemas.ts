@@ -10,7 +10,22 @@ export const fleetSchema = z.object({
   plate: z.string().min(1),
   brand: z.string().min(1),
   model: z.string().min(1),
+  unit_type: z.enum(['standard', 'transportista']).optional().default('standard'),
+  color: z.string().optional(),
+  sct_permit: z.string().optional(),
+  insurance_policy: z.string().optional(),
+  insurance_company: z.string().optional(),
+  trailer_plate: z.string().optional(),
   tenant_id: z.string().optional()
+});
+
+export const transportDriverSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  rfc: z.string().optional(),
+  zip_code: z.string().optional(),
+  license_number: z.string().optional(),
+  data: z.object({}).passthrough().optional()
 });
 
 export const paymentReportSchema = z.object({
