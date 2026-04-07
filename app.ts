@@ -47,7 +47,7 @@ export const pool = new Pool({
 });
 MaintenanceService.setPool(pool);
 
-export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+export const redis = new Redis(process.env.REDIS_URL as string);
 redis.on('error', (err) => {
   console.warn('[ioredis] No se pudo conectar a Redis. La caché estará desactivada:', err.message);
 });
@@ -103,7 +103,7 @@ app.post('/api/auth/login', loginLimiter, async (req, res) => {
 
       const token = jwt.sign(
         { id: user.id, email: user.email, role: user.role, tenant_id: user.tenant_id },
-        process.env.JWT_SECRET || 'aurum-secret-key-change-in-prod',
+        process.env.JWT_SECRET as string,
         { expiresIn: '8h' }
       );
 
