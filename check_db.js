@@ -1,7 +1,11 @@
 import pg from 'pg';
 const { Pool } = pg;
 
-const DATABASE_URL = "postgres://postgres:57c52e388e393eb0b74f@cloud.qhosting.net:1087/aurum-leasing-db?sslmode=disable";
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+    console.error('❌ Error: DATABASE_URL variable de entorno no encontrada.');
+    process.exit(1);
+}
 
 async function checkUsers() {
     const pool = new Pool({ connectionString: DATABASE_URL });

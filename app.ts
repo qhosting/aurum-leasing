@@ -468,7 +468,8 @@ app.post('/api/drivers/:id/verify-license', authenticateToken, upload.single('li
   const { id } = req.params;
   if (!req.file) return res.status(400).json({ error: 'No se proporcionó imagen de la licencia' });
 
-  const apiKey = process.env.GEMINI_API_KEY || 'AIza...';
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'Config error: GEMINI_API_KEY is not set.' });
   const ai = new GoogleGenAI({ apiKey });
 
   try {
@@ -525,7 +526,6 @@ app.post('/api/drivers/:id/verify-license', authenticateToken, upload.single('li
   }
 });
 
-// --- Maintenance Routes ---
 app.post('/api/maintenance/log', authenticateToken, authorizeRoles('Arrendador'), async (req, res) => {
   const { vehicle_id, ...data } = req.body;
   try {
