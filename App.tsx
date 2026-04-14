@@ -75,8 +75,6 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
   const [userLocation, setUserLocation] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
-  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
-
   useEffect(() => {
     setIsLocating(true);
     if ("geolocation" in navigator) {
@@ -95,8 +93,8 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
       <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 h-20 flex items-center px-6">
         <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center font-black text-slate-900 text-xl shadow-lg">A</div>
-            <span className="text-xl font-black tracking-tighter uppercase italic">Aurum</span>
+            <img src="/logo.png" alt="Aurum Logo" className="w-12 h-12 object-contain" />
+            <span className="text-xl font-black tracking-tighter uppercase italic text-white">Aurum Leasing</span>
           </div>
           <button
             onClick={onStart}
@@ -107,29 +105,141 @@ const LandingPage: React.FC<{ onStart: () => void }> = ({ onStart }) => {
         </div>
       </header>
 
-      <main className="pt-48 pb-32 px-6 max-w-7xl mx-auto relative">
-        <div className="max-w-4xl relative z-10">
-          <div className="inline-flex items-center gap-3 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-500 text-[10px] font-black uppercase tracking-widest mb-8">
-            <Sparkles className="w-3 h-3" />
-            {isLocating ? "Detectando ubicación..." : `Sede: ${userLocation || "México"}`}
+      <main className="relative">
+        {/* HERO SECTION */}
+        <section className="pt-48 pb-32 px-6 max-w-7xl mx-auto relative min-h-[90vh] flex flex-col justify-center">
+          <div className="max-w-4xl relative z-10">
+            <div className="inline-flex items-center gap-3 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-500 text-[10px] font-black uppercase tracking-widest mb-8">
+              <Sparkles className="w-3 h-3" />
+              {isLocating ? "Detectando ubicación..." : `Sede: ${userLocation || "México"}`}
+            </div>
+            <h1 className="text-6xl md:text-9xl font-black tracking-tighter italic leading-[0.85] mb-10">
+              EL LEASING <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">INTELIGENTE</span> <br />
+              YA LLEGÓ.
+            </h1>
+            <p className="text-lg md:text-2xl text-slate-400 font-medium max-w-2xl mb-12">
+              Gestión de activos móviles de alto rendimiento para flotas Enterprise, impulsada por tecnología Gemini AI Pro para la máxima rentabilidad.
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <button
+                onClick={onStart}
+                className="px-12 py-7 bg-amber-500 text-slate-900 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.3em] flex items-center gap-3 shadow-2xl hover:scale-105 active:scale-95 transition-all"
+              >
+                Comenzar ahora <ArrowRight className="w-5 h-5" />
+              </button>
+              <div className="flex -space-x-3 items-center ml-4">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="w-10 h-10 rounded-full border-2 border-slate-950 bg-slate-800 flex items-center justify-center overflow-hidden">
+                    <img src={`https://i.pravatar.cc/100?u=${i}`} alt="User" />
+                  </div>
+                ))}
+                <span className="ml-6 text-[10px] font-black text-slate-500 uppercase tracking-widest">+500 Flotas Gestionadas</span>
+              </div>
+            </div>
           </div>
-          <h1 className="text-6xl md:text-9xl font-black tracking-tighter italic leading-[0.85] mb-10">
-            EL LEASING <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600">INTELIGENTE</span> <br />
-            YA LLEGÓ.
-          </h1>
-          <p className="text-lg md:text-2xl text-slate-400 font-medium max-w-2xl mb-12">
-            Gestión de activos móviles de alto rendimiento para flotas Enterprise, impulsada por Gemini AI Pro.
-          </p>
-          <button
-            onClick={onStart}
-            className="px-12 py-7 bg-amber-500 text-slate-900 rounded-[2.5rem] text-[11px] font-black uppercase tracking-[0.3em] flex items-center gap-3 shadow-2xl hover:scale-105 active:scale-95 transition-all"
-          >
-            Comenzar ahora <ArrowRight className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="absolute top-0 right-0 w-[60%] h-[120%] bg-amber-500/10 blur-[150px] -z-10"></div>
+          <div className="absolute top-0 right-0 w-[60%] h-[120%] bg-amber-500/10 blur-[150px] -z-10"></div>
+        </section>
+
+        {/* FEATURES GRID */}
+        <section className="py-32 px-6 bg-slate-900/50 border-y border-white/5">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+              <div className="space-y-6">
+                <div className="w-16 h-16 bg-amber-500/10 rounded-3xl flex items-center justify-center text-amber-500 border border-amber-500/20">
+                  <BrainCircuit className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-black italic uppercase tracking-tighter">AI Risk Analysis</h3>
+                <p className="text-slate-400 leading-relaxed">Evaluación predictiva de conductores mediante algoritmos avanzados para reducir la siniestralidad y el impago.</p>
+              </div>
+              <div className="space-y-6">
+                <div className="w-16 h-16 bg-blue-500/10 rounded-3xl flex items-center justify-center text-blue-500 border border-blue-500/20">
+                  <Zap className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-black italic uppercase tracking-tighter">Omnicanalidad</h3>
+                <p className="text-slate-400 leading-relaxed">Conexión directa vía WhatsApp API para cobranza automatizada, alertas de mantenimiento y soporte 24/7.</p>
+              </div>
+              <div className="space-y-6">
+                <div className="w-16 h-16 bg-emerald-500/10 rounded-3xl flex items-center justify-center text-emerald-500 border border-emerald-500/20">
+                  <Shield className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-black italic uppercase tracking-tighter">Control 360°</h3>
+                <p className="text-slate-400 leading-relaxed">Dashboard ejecutivo con métricas de rendimiento en tiempo real, histórico de flotas y proyecciones financieras.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* METRICS SECTION */}
+        <section className="py-32 px-6 max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-16">
+            <div className="flex-1">
+              <h2 className="text-5xl md:text-7xl font-black tracking-tighter italic mb-8">NÚMEROS QUE <br /> <span className="text-amber-500">HABLAN.</span></h2>
+              <div className="space-y-8">
+                <div className="flex items-center gap-6">
+                  <span className="text-6xl font-black text-white italic tracking-tighter">30%</span>
+                  <p className="text-xs font-black uppercase text-slate-500 tracking-widest">Reducción promedio <br /> de riesgo crediticio</p>
+                </div>
+                <div className="flex items-center gap-6">
+                  <span className="text-6xl font-black text-white italic tracking-tighter">99.9%</span>
+                  <p className="text-xs font-black uppercase text-slate-500 tracking-widest">Disponibilidad del <br /> sistema SaaS</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 bg-gradient-to-br from-amber-500 to-amber-700 p-1 rounded-[3rem] shadow-2xl">
+              <div className="bg-slate-950 p-12 rounded-[2.8rem] space-y-6">
+                <blockquote className="text-2xl font-medium italic text-slate-200">
+                  "AurumLeasing transformó nuestra gestión de flota de 200 vehículos. La IA nos ahorra miles de dólares al mes en mantenimiento preventivo."
+                </blockquote>
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-800"></div>
+                  <div>
+                    <p className="text-sm font-black uppercase italic">Director de Operaciones</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Corporación Logística Global</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
+
+      {/* FOOTER */}
+      <footer className="py-20 px-6 border-t border-white/5 bg-slate-950">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-12">
+          <div className="col-span-2">
+            <div className="flex items-center gap-3 mb-6">
+              <img src="/logo.png" alt="Aurum Logo" className="w-10 h-10 object-contain" />
+              <span className="text-lg font-black tracking-tighter uppercase italic text-white">Aurum Leasing</span>
+            </div>
+            <p className="text-slate-500 max-w-sm text-sm">El ecosistema definitivo para el control de activos vehiculares de alto impacto.</p>
+          </div>
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500 mb-6">Plataforma</h4>
+            <ul className="space-y-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <li className="hover:text-amber-500 cursor-pointer transition-colors">RiskAI Engine</li>
+              <li className="hover:text-amber-500 cursor-pointer transition-colors">Flota Enterprise</li>
+              <li className="hover:text-amber-500 cursor-pointer transition-colors">API Docs</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500 mb-6">Compañía</h4>
+            <ul className="space-y-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <li className="hover:text-amber-500 cursor-pointer transition-colors">Privacidad</li>
+              <li className="hover:text-amber-500 cursor-pointer transition-colors">Términos</li>
+              <li className="hover:text-amber-500 cursor-pointer transition-colors">Contacto</li>
+            </ul>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto mt-20 pt-8 border-t border-white/5 flex justify-between items-center text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">
+          <p>© 2026 Aurum Leasing. Todos los derechos reservados.</p>
+          <div className="flex gap-6">
+            <span className="hover:text-white cursor-pointer transition-colors">SLA 99%</span>
+            <span className="hover:text-white cursor-pointer transition-colors">Certificado SSL</span>
+          </div>
+        </div>
+      </footer>
+      <WhatsAppFloat phone={systemConfig.saas_contact_whatsapp} />
     </div>
   );
 };
@@ -144,6 +254,15 @@ const App: React.FC = () => {
   const [globalVisits, setGlobalVisits] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [systemConfig, setSystemConfig] = useState<any>({ saas_contact_whatsapp: '5215555555555' });
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      const config = await persistenceService.getSystemConfig();
+      if (config.saas_contact_whatsapp) setSystemConfig(config);
+    };
+    loadConfig();
+  }, []);
 
   const refreshData = useCallback(async () => {
     if (!role) return;
@@ -227,8 +346,8 @@ const App: React.FC = () => {
     <div className="flex min-h-screen bg-slate-50 font-sans">
       <aside className={`fixed inset-y-0 left-0 z-[60] w-72 bg-slate-900 text-white flex flex-col shadow-2xl transition-transform lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:static'}`}>
         <div className="p-6 border-b border-white/10 flex items-center gap-3">
-          <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center font-black text-slate-900 text-xl shadow-lg">A</div>
-          <span className="text-lg font-black tracking-tighter uppercase italic">Aurum</span>
+          <img src="/logo.png" alt="Aurum Logo" className="w-10 h-10 object-contain" />
+          <span className="text-lg font-black tracking-tighter uppercase italic text-white">Aurum Leasing</span>
         </div>
         <nav className="flex-1 p-4 space-y-2 mt-4">
           {menuItems.map((item) => (
@@ -297,6 +416,7 @@ const App: React.FC = () => {
             </React.Suspense>
           </div>
         )}
+        <WhatsAppFloat phone={systemConfig.saas_contact_whatsapp} />
       </main>
     </div>
   );
@@ -334,7 +454,7 @@ const LoginView: React.FC<{ onLogin: (user: any) => void; onBack: () => void }> 
         </button>
         <div className="bg-slate-900 border border-white/5 p-12 rounded-[4rem] shadow-2xl">
           <div className="text-center mb-12">
-            <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center font-black text-slate-900 text-3xl mx-auto mb-6">A</div>
+            <img src="/logo.png" alt="Aurum Logo" className="w-24 h-24 object-contain mx-auto mb-6" />
             <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">Acceso Staff</h2>
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -358,3 +478,17 @@ const LoginView: React.FC<{ onLogin: (user: any) => void; onBack: () => void }> 
 };
 
 export default App;
+
+const WhatsAppFloat: React.FC<{ phone: string }> = ({ phone }) => (
+  <a 
+    href={`https://wa.me/${phone}`} 
+    target="_blank" 
+    rel="noopener noreferrer"
+    className="fixed bottom-10 right-10 z-[100] w-16 h-16 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all group"
+  >
+    <div className="absolute -top-12 right-0 bg-white text-slate-900 border border-slate-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl">
+      ¿Necesitas ayuda?
+    </div>
+    <MessageSquare className="w-8 h-8" />
+  </a>
+);

@@ -63,7 +63,8 @@ const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onLogout }) => {
         {[
           { id: 'dashboard', label: 'Consola Estratégica', icon: <Cpu className="w-4 h-4" /> },
           { id: 'arrendadoras', label: 'Clientes SaaS', icon: <Users className="w-4 h-4" /> },
-          { id: 'planes', label: 'Gestión de Planes', icon: <Layers className="w-4 h-4" /> }
+          { id: 'planes', label: 'Gestión de Planes', icon: <Layers className="w-4 h-4" /> },
+          { id: 'config', label: 'Configuración', icon: <Settings2 className="w-4 h-4" /> }
         ].map(tab => (
           <button
             key={tab.id}
@@ -76,6 +77,43 @@ const SuperAdminView: React.FC<SuperAdminViewProps> = ({ onLogout }) => {
           </button>
         ))}
       </div>
+
+      {activeSubTab === 'config' && (
+        <div className="space-y-8 animate-in slide-in-from-bottom-5">
+           <div className="bg-white p-12 rounded-[4rem] border border-slate-200 shadow-sm max-w-2xl">
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight italic uppercase mb-8">Configuración Global</h3>
+              <div className="space-y-8">
+                <div>
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4 italic">Número WhatsApp de Soporte (SaaS)</label>
+                   <div className="flex gap-4">
+                      <div className="relative flex-1">
+                        <MessageSquare className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <input 
+                          type="text" 
+                          id="whatsapp_contact"
+                          defaultValue={globalStats.contactWhatsapp || '5215555555555'} 
+                          placeholder="Ej: 52155..." 
+                          className="w-full pl-14 pr-6 py-5 bg-slate-50 border border-slate-200 rounded-[2rem] text-sm font-bold outline-none focus:border-amber-500 transition-all" 
+                        />
+                      </div>
+                      <button 
+                        onClick={async () => {
+                          const val = (document.getElementById('whatsapp_contact') as HTMLInputElement).value;
+                          const res = await persistenceService.updateSystemConfig({ saas_contact_whatsapp: val });
+                          if (res.success) alert('Configuración actualizada con éxito.');
+                          else alert('Error al actualizar.');
+                        }}
+                        className="px-10 py-5 bg-slate-900 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-slate-900 transition-all flex items-center gap-3"
+                      >
+                         <Save className="w-4 h-4" /> Guardar
+                      </button>
+                   </div>
+                   <p className="mt-4 text-[10px] text-slate-400 font-bold uppercase">Formato internacional sin símbolos (+). Ej: 5215551234567</p>
+                </div>
+              </div>
+           </div>
+        </div>
+      )}
 
       {activeSubTab === 'dashboard' && (
         <div className="space-y-8 animate-in slide-in-from-bottom-5">

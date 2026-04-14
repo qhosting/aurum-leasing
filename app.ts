@@ -449,6 +449,34 @@ app.get('/api/super/plans', authenticateToken, authorizeRoles('Super Admin'), as
   res.json(r.rows);
 });
 
+// System Config Endpoints
+app.get('/api/system/config', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM system_config');
+    const config = r.rows.reduce((acc, row) => ({ ...acc, [row.key]: row.value }), {});
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ error: 'Error obteniendo configuración global' });
+  }
+});
+
+app.patch('/api/admin/system/config', authenticateToken, authorizeRoles('Super Admin'), async (req, res) => {
+  const { entries } = req.body;
+  if (!entries || typeof entries !== 'object') return res.status(400).json({ error: 'Formato inválido: se requiere un objeto "entries"' });
+  
+  try {
+    await pool.query('BEGIN');
+    for (const [key, value] of Object.entries(entries)) {
+      await pool.query('INSERT INTO system_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()', [key, value]);
+    }
+    await pool.query('COMMIT');
+    res.json({ success: true });
+  } catch (err) {
+    await pool.query('ROLLBACK');
+    res.status(500).json({ error: 'Error actualizando configuración global' });
+  }
+});
+
 // WAHA Integration
 app.post('/api/whatsapp/send', authenticateToken, authorizeRoles('Super Admin', 'Arrendador'), async (req, res) => {
   const validation = whatsappSendSchema.safeParse(req.body);

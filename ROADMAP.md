@@ -137,6 +137,12 @@
 - [x] Migraciones automatizadas (node-pg-migrate en modo CJS)
 - [x] Seed data de desarrollo para testing
 
+### **Branding & Identidad Visual**
+- [x] Implementación de identidad corporativa "Aurum Leasing"
+- [x] Integración de logo oficial en Landing, Dashboard y Login
+- [x] Generación de manual de ventas y presentaciones comerciales (PDF)
+- [x] Configuración de activos PWA (icon-512) con branding real
+
 ### **Testing**
 - [x] Configuración Vitest para tests unitarios
 - [x] Tests de integración con Supertest
@@ -214,6 +220,6 @@ npm run format         # Formateo con Prettier
 
 ---
 
-**Última Actualización**: 2026-02-01  
+**Última Actualización**: 2026-04-14  
 **Estado General**: ✅ **Funcional y desplegable en Development**  
 **Versión**: 1.0.0

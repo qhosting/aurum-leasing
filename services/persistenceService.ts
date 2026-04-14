@@ -277,5 +277,24 @@ export const persistenceService = {
       const res = await fetchWithAuth(`${API_BASE}/fleet/${id}`);
       return await res.json();
     } catch { return null; }
+  },
+
+  // System Configuration Methods
+  async getSystemConfig(): Promise<any> {
+    try {
+      const res = await fetch(`${API_BASE}/system/config`); // Public endpoint
+      return await res.json();
+    } catch { return {}; }
+  },
+
+  async updateSystemConfig(entries: Record<string, string>): Promise<any> {
+    try {
+      const res = await fetchWithAuth(`${API_BASE}/admin/system/config`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries })
+      });
+      return await res.json();
+    } catch { return { success: false }; }
   }
 };
